@@ -1,0 +1,108 @@
+# ============================================================
+# Maven build output
+# ============================================================
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ============================================================
+# Java
+# ============================================================
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# ============================================================
+# Spring Boot
+# ============================================================
+*.orig
+
+# ============================================================
+# Application secrets — never commit these
+# ============================================================
+application-local.properties
+application-local.yml
+application-secret*.properties
+application-secret*.yml
+*.p12
+*.jks
+*.pem
+*.key
+
+# ============================================================
+# IntelliJ IDEA
+# ============================================================
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# ============================================================
+# NetBeans
+# ============================================================
+nbproject/private/
+nbproject/Makefile-*.mk
+nbproject/Package-*.bash
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# ============================================================
+# Eclipse
+# ============================================================
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# ============================================================
+# VS Code
+# ============================================================
+.vscode/
+
+# ============================================================
+# macOS
+# ============================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+spring.log
+
+# ============================================================
+# Vaadin — generated at build/dev-server startup, never commit
+# ============================================================
+src/main/frontend/generated/
+src/main/bundles/
+node_modules/
+.vaadin/
+
+# ============================================================
+# Flyway — never commit baseline dumps generated locally
+# ============================================================
+src/main/resources/db/migration/*.sql.bak
