@@ -1,6 +1,8 @@
 package com.magicsystems.jrostering.ui;
 
+import com.magicsystems.jrostering.ui.account.AccountView;
 import com.magicsystems.jrostering.ui.dashboard.DashboardView;
+import com.magicsystems.jrostering.ui.qualification.QualificationView;
 import com.magicsystems.jrostering.ui.report.ReportView;
 import com.magicsystems.jrostering.ui.roster.RosterView;
 import com.magicsystems.jrostering.ui.site.SiteView;
@@ -56,11 +58,13 @@ public class MainLayout extends AppLayout {
 
     private SideNav buildNav() {
         SideNav nav = new SideNav();
-        nav.addItem(new SideNavItem("Dashboard",  DashboardView.class, VaadinIcon.DASHBOARD.create()));
-        nav.addItem(new SideNavItem("Staff",      StaffView.class,     VaadinIcon.USERS.create()));
-        nav.addItem(new SideNavItem("Sites",      SiteView.class,      VaadinIcon.BUILDING.create()));
-        nav.addItem(new SideNavItem("Roster",     RosterView.class,    VaadinIcon.CALENDAR.create()));
-        nav.addItem(new SideNavItem("Reports",    ReportView.class,    VaadinIcon.FILE_TABLE.create()));
+        nav.addItem(new SideNavItem("Dashboard",       DashboardView.class,     VaadinIcon.DASHBOARD.create()));
+        nav.addItem(new SideNavItem("Staff",           StaffView.class,         VaadinIcon.USERS.create()));
+        nav.addItem(new SideNavItem("Sites",           SiteView.class,          VaadinIcon.BUILDING.create()));
+        nav.addItem(new SideNavItem("Qualifications",  QualificationView.class, VaadinIcon.DIPLOMA.create()));
+        nav.addItem(new SideNavItem("Roster",          RosterView.class,        VaadinIcon.CALENDAR.create()));
+        nav.addItem(new SideNavItem("Reports",         ReportView.class,        VaadinIcon.FILE_TABLE.create()));
+        nav.addItem(new SideNavItem("Account",         AccountView.class,       VaadinIcon.COG.create()));
         return nav;
     }
 }
