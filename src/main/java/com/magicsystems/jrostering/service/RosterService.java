@@ -492,6 +492,16 @@ public class RosterService {
     }
 
     /**
+     * Returns all qualification requirements for the given shift.
+     *
+     * @throws EntityNotFoundException if the shift does not exist
+     */
+    @Transactional(readOnly = true)
+    public List<ShiftQualificationRequirement> getQualificationRequirements(Long shiftId) {
+        return shiftQualRequirementRepository.findByShift(requireShift(shiftId));
+    }
+
+    /**
      * Removes a qualification requirement from a shift.
      *
      * @throws EntityNotFoundException if the requirement does not exist
