@@ -205,10 +205,41 @@ public class SiteView extends VerticalLayout {
             }
         });
 
+        Button editShiftTypeBtn = new Button("Edit Selected");
+        editShiftTypeBtn.setEnabled(false);
+
         Button removeBtn = new Button("Remove Selected");
         removeBtn.addThemeVariants(ButtonVariant.LUMO_ERROR);
         removeBtn.setEnabled(false);
-        grid.addSelectionListener(ev -> removeBtn.setEnabled(ev.getFirstSelectedItem().isPresent()));
+
+        grid.addSelectionListener(ev -> {
+            boolean hasSelection = ev.getFirstSelectedItem().isPresent();
+            editShiftTypeBtn.setEnabled(hasSelection);
+            removeBtn.setEnabled(hasSelection);
+        });
+
+        editShiftTypeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(st -> {
+            Dialog dialog = new Dialog();
+            dialog.setHeaderTitle("Edit Shift Type");
+            TextField nameField2 = new TextField("Name");
+            nameField2.setValue(st.getName());
+            dialog.add(nameField2);
+            Button save = new Button("Save", ev -> {
+                try {
+                    siteService.updateShiftType(st.getId(), nameField2.getValue());
+                    grid.setItems(siteService.getShiftTypes(site.getId()));
+                    dialog.close();
+                    notify("Shift type updated.", NotificationVariant.LUMO_SUCCESS);
+                } catch (Exception ex) {
+                    notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                }
+            });
+            Button cancel = new Button("Cancel", ev -> dialog.close());
+            save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+            dialog.getFooter().add(cancel, save);
+            dialog.open();
+        }));
+
         removeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(st -> {
             try {
                 siteService.removeShiftType(st.getId());
@@ -219,7 +250,7 @@ public class SiteView extends VerticalLayout {
             }
         }));
 
-        layout.add(grid, new HorizontalLayout(nameField, addBtn, removeBtn));
+        layout.add(grid, new HorizontalLayout(nameField, addBtn, editShiftTypeBtn, removeBtn));
         return layout;
     }
 

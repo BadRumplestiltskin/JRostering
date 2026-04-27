@@ -4,8 +4,12 @@ import com.magicsystems.jrostering.domain.*;
 import com.magicsystems.jrostering.repository.OrganisationRepository;
 import com.magicsystems.jrostering.repository.QualificationRepository;
 import com.magicsystems.jrostering.repository.SiteRepository;
+import com.magicsystems.jrostering.repository.StaffIncompatibilityRepository;
+import com.magicsystems.jrostering.repository.StaffPairingRepository;
 import com.magicsystems.jrostering.repository.StaffQualificationRepository;
 import com.magicsystems.jrostering.repository.StaffSiteAssignmentRepository;
+import com.magicsystems.jrostering.domain.StaffIncompatibility;
+import com.magicsystems.jrostering.domain.StaffPairing;
 import com.magicsystems.jrostering.service.StaffService;
 import com.magicsystems.jrostering.service.StaffService.StaffCreateRequest;
 import com.magicsystems.jrostering.service.StaffService.StaffUpdateRequest;
@@ -53,8 +57,10 @@ public class StaffView extends VerticalLayout {
     private final OrganisationRepository         organisationRepository;
     private final QualificationRepository        qualificationRepository;
     private final SiteRepository                 siteRepository;
-    private final StaffQualificationRepository   staffQualificationRepository;
-    private final StaffSiteAssignmentRepository  staffSiteAssignmentRepository;
+    private final StaffQualificationRepository        staffQualificationRepository;
+    private final StaffSiteAssignmentRepository       staffSiteAssignmentRepository;
+    private final StaffIncompatibilityRepository      staffIncompatibilityRepository;
+    private final StaffPairingRepository              staffPairingRepository;
 
     private final Grid<Staff>   staffGrid  = new Grid<>(Staff.class, false);
     private final VerticalLayout detailPanel = new VerticalLayout();
@@ -67,13 +73,17 @@ public class StaffView extends VerticalLayout {
                      QualificationRepository qualificationRepository,
                      SiteRepository siteRepository,
                      StaffQualificationRepository staffQualificationRepository,
-                     StaffSiteAssignmentRepository staffSiteAssignmentRepository) {
-        this.staffService                 = staffService;
-        this.organisationRepository       = organisationRepository;
-        this.qualificationRepository      = qualificationRepository;
-        this.siteRepository               = siteRepository;
-        this.staffQualificationRepository = staffQualificationRepository;
+                     StaffSiteAssignmentRepository staffSiteAssignmentRepository,
+                     StaffIncompatibilityRepository staffIncompatibilityRepository,
+                     StaffPairingRepository staffPairingRepository) {
+        this.staffService                  = staffService;
+        this.organisationRepository        = organisationRepository;
+        this.qualificationRepository       = qualificationRepository;
+        this.siteRepository                = siteRepository;
+        this.staffQualificationRepository  = staffQualificationRepository;
         this.staffSiteAssignmentRepository = staffSiteAssignmentRepository;
+        this.staffIncompatibilityRepository = staffIncompatibilityRepository;
+        this.staffPairingRepository         = staffPairingRepository;
 
         orgId = organisationRepository.findAll().stream()
                 .findFirst().map(Organisation::getId).orElse(null);
@@ -222,11 +232,13 @@ public class StaffView extends VerticalLayout {
 
         TabSheet tabs = new TabSheet();
         tabs.setWidthFull();
-        tabs.add("Qualifications", buildQualificationsTab(staff));
+        tabs.add("Qualifications",    buildQualificationsTab(staff));
         tabs.add("Site Assignments",  buildSiteAssignmentsTab(staff));
-        tabs.add("Availability",   buildAvailabilityTab(staff));
-        tabs.add("Preferences",    buildPreferencesTab(staff));
-        tabs.add("Leave",          buildLeaveTab(staff));
+        tabs.add("Incompatibilities", buildIncompatibilitiesTab(staff));
+        tabs.add("Pairings",          buildPairingsTab(staff));
+        tabs.add("Availability",      buildAvailabilityTab(staff));
+        tabs.add("Preferences",       buildPreferencesTab(staff));
+        tabs.add("Leave",             buildLeaveTab(staff));
 
         detailPanel.add(tabs);
         detailPanel.setVisible(true);
@@ -289,6 +301,11 @@ public class StaffView extends VerticalLayout {
         grid.setItems(staffQualificationRepository.findByStaff(fresh));
     }
 
+    private void refreshSiteGrid(Grid<StaffSiteAssignment> grid, Staff staff) {
+        Staff fresh = staffService.getById(staff.getId());
+        grid.setItems(staffSiteAssignmentRepository.findByStaff(fresh));
+    }
+
     // -- Site Assignments tab --
 
     private VerticalLayout buildSiteAssignmentsTab(Staff staff) {
@@ -299,8 +316,7 @@ public class StaffView extends VerticalLayout {
         grid.addColumn(a -> a.getSite().getName()).setHeader("Site").setAutoWidth(true);
         grid.addColumn(StaffSiteAssignment::isPrimarySite).setHeader("Primary").setAutoWidth(true);
         grid.setAllRowsVisible(true);
-        Staff fresh = staffService.getById(staff.getId());
-        grid.setItems(staffSiteAssignmentRepository.findByStaff(fresh));
+        refreshSiteGrid(grid, staff);
 
         ComboBox<Site> siteBox = new ComboBox<>("Site");
         siteBox.setItems(siteRepository.findAll());
@@ -312,6 +328,7 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.addSiteAssignment(staff.getId(), siteBox.getValue().getId(),
                         primary.getValue());
+                refreshSiteGrid(grid, staff);
                 siteBox.clear();
                 primary.setValue(false);
                 notify("Site assignment added.", NotificationVariant.LUMO_SUCCESS);
@@ -320,8 +337,146 @@ public class StaffView extends VerticalLayout {
             }
         });
 
-        layout.add(grid, new HorizontalLayout(siteBox, primary, addBtn));
+        Button removeBtn = new Button("Remove Selected");
+        removeBtn.setEnabled(false);
+        removeBtn.addThemeVariants(ButtonVariant.LUMO_ERROR);
+        grid.addSelectionListener(ev -> removeBtn.setEnabled(ev.getFirstSelectedItem().isPresent()));
+        removeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(assignment -> {
+            try {
+                staffService.removeSiteAssignment(staff.getId(), assignment.getSite().getId());
+                refreshSiteGrid(grid, staff);
+                notify("Site assignment removed.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        }));
+
+        layout.add(grid, new HorizontalLayout(siteBox, primary, addBtn, removeBtn));
         return layout;
+    }
+
+    // -- Incompatibilities tab --
+
+    private VerticalLayout buildIncompatibilitiesTab(Staff staff) {
+        VerticalLayout layout = new VerticalLayout();
+        layout.setPadding(false);
+
+        Grid<StaffIncompatibility> grid = new Grid<>(StaffIncompatibility.class, false);
+        grid.addColumn(i -> {
+            Staff other = i.getStaffA().getId().equals(staff.getId()) ? i.getStaffB() : i.getStaffA();
+            return other.getFirstName() + " " + other.getLastName();
+        }).setHeader("Other Staff").setAutoWidth(true);
+        grid.addColumn(i -> i.getReason() != null ? i.getReason() : "—")
+                .setHeader("Reason").setAutoWidth(true);
+        grid.setAllRowsVisible(true);
+        refreshIncompatibilitiesGrid(grid, staff);
+
+        ComboBox<Staff> otherStaff = new ComboBox<>("Staff");
+        otherStaff.setItems(staffService.getAllActiveByOrganisation(orgId).stream()
+                .filter(s -> !s.getId().equals(staff.getId())).toList());
+        otherStaff.setItemLabelGenerator(s -> s.getFirstName() + " " + s.getLastName());
+
+        TextField reason = new TextField("Reason (optional)");
+
+        Button addBtn = new Button("Add", e -> {
+            if (otherStaff.getValue() == null) return;
+            try {
+                staffService.addIncompatibility(staff.getId(), otherStaff.getValue().getId(),
+                        reason.getValue().isBlank() ? null : reason.getValue());
+                refreshIncompatibilitiesGrid(grid, staff);
+                otherStaff.clear();
+                reason.clear();
+                notify("Incompatibility added.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        });
+
+        Button removeBtn = new Button("Remove Selected");
+        removeBtn.setEnabled(false);
+        removeBtn.addThemeVariants(ButtonVariant.LUMO_ERROR);
+        grid.addSelectionListener(ev -> removeBtn.setEnabled(ev.getFirstSelectedItem().isPresent()));
+        removeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(selectedRow -> {
+            try {
+                Long otherId = selectedRow.getStaffA().getId().equals(staff.getId())
+                        ? selectedRow.getStaffB().getId() : selectedRow.getStaffA().getId();
+                staffService.removeIncompatibility(staff.getId(), otherId);
+                refreshIncompatibilitiesGrid(grid, staff);
+                notify("Incompatibility removed.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        }));
+
+        layout.add(grid, new HorizontalLayout(otherStaff, reason, addBtn, removeBtn));
+        return layout;
+    }
+
+    private void refreshIncompatibilitiesGrid(Grid<StaffIncompatibility> grid, Staff staff) {
+        Staff fresh = staffService.getById(staff.getId());
+        grid.setItems(staffIncompatibilityRepository.findByStaff(fresh));
+    }
+
+    // -- Pairings tab --
+
+    private VerticalLayout buildPairingsTab(Staff staff) {
+        VerticalLayout layout = new VerticalLayout();
+        layout.setPadding(false);
+
+        Grid<StaffPairing> grid = new Grid<>(StaffPairing.class, false);
+        grid.addColumn(p -> {
+            Staff other = p.getStaffA().getId().equals(staff.getId()) ? p.getStaffB() : p.getStaffA();
+            return other.getFirstName() + " " + other.getLastName();
+        }).setHeader("Other Staff").setAutoWidth(true);
+        grid.addColumn(p -> p.getReason() != null ? p.getReason() : "—")
+                .setHeader("Reason").setAutoWidth(true);
+        grid.setAllRowsVisible(true);
+        refreshPairingsGrid(grid, staff);
+
+        ComboBox<Staff> otherStaff = new ComboBox<>("Staff");
+        otherStaff.setItems(staffService.getAllActiveByOrganisation(orgId).stream()
+                .filter(s -> !s.getId().equals(staff.getId())).toList());
+        otherStaff.setItemLabelGenerator(s -> s.getFirstName() + " " + s.getLastName());
+
+        TextField reason = new TextField("Reason (optional)");
+
+        Button addBtn = new Button("Add", e -> {
+            if (otherStaff.getValue() == null) return;
+            try {
+                staffService.addPairing(staff.getId(), otherStaff.getValue().getId(),
+                        reason.getValue().isBlank() ? null : reason.getValue());
+                refreshPairingsGrid(grid, staff);
+                otherStaff.clear();
+                reason.clear();
+                notify("Pairing added.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        });
+
+        Button removeBtn = new Button("Remove Selected");
+        removeBtn.setEnabled(false);
+        removeBtn.addThemeVariants(ButtonVariant.LUMO_ERROR);
+        grid.addSelectionListener(ev -> removeBtn.setEnabled(ev.getFirstSelectedItem().isPresent()));
+        removeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(selectedRow -> {
+            try {
+                Long otherId = selectedRow.getStaffA().getId().equals(staff.getId())
+                        ? selectedRow.getStaffB().getId() : selectedRow.getStaffA().getId();
+                staffService.removePairing(staff.getId(), otherId);
+                refreshPairingsGrid(grid, staff);
+                notify("Pairing removed.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        }));
+
+        layout.add(grid, new HorizontalLayout(otherStaff, reason, addBtn, removeBtn));
+        return layout;
+    }
+
+    private void refreshPairingsGrid(Grid<StaffPairing> grid, Staff staff) {
+        Staff fresh = staffService.getById(staff.getId());
+        grid.setItems(staffPairingRepository.findByStaff(fresh));
     }
 
     // -- Availability tab --

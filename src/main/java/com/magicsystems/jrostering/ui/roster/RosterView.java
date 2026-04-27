@@ -60,9 +60,10 @@ public class RosterView extends VerticalLayout {
     private final VerticalLayout              assignmentsPanel  = new VerticalLayout();
     private final Grid<ShiftAssignment>       assignmentsGrid   = new Grid<>(ShiftAssignment.class, false);
 
-    private RosterPeriod selectedPeriod;
-    private Shift        selectedShift;
-    private Long         lastJobId;
+    private RosterPeriod     selectedPeriod;
+    private Shift            selectedShift;
+    private ShiftAssignment  selectedAssignment;
+    private Long             lastJobId;
 
     public RosterView(SiteService siteService,
                       RosterService rosterService,
@@ -451,7 +452,39 @@ public class RosterView extends VerticalLayout {
         assignmentsGrid.addColumn(a -> a.isPinned() ? "Pinned" : "").setHeader("").setAutoWidth(true);
         assignmentsGrid.setHeight("350px");
 
-        assignmentsPanel.add(assignmentsGrid);
+        Button pinBtn   = new Button("Pin");
+        Button unpinBtn = new Button("Unpin");
+        pinBtn.setEnabled(false);
+        unpinBtn.setEnabled(false);
+
+        assignmentsGrid.addSelectionListener(sel -> {
+            selectedAssignment = sel.getFirstSelectedItem().orElse(null);
+            boolean hasSel = selectedAssignment != null;
+            pinBtn.setEnabled(hasSel);
+            unpinBtn.setEnabled(hasSel);
+        });
+
+        pinBtn.addClickListener(e -> {
+            try {
+                rosterService.pin(selectedAssignment.getId());
+                refreshAssignments();
+                notify("Assignment pinned.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        });
+
+        unpinBtn.addClickListener(e -> {
+            try {
+                rosterService.unpin(selectedAssignment.getId());
+                refreshAssignments();
+                notify("Assignment unpinned.", NotificationVariant.LUMO_SUCCESS);
+            } catch (Exception ex) {
+                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            }
+        });
+
+        assignmentsPanel.add(assignmentsGrid, new HorizontalLayout(pinBtn, unpinBtn));
     }
 
     private void refreshAssignments() {
