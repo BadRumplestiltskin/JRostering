@@ -50,11 +50,12 @@ public class AppUserService {
      * @throws InvalidOperationException if the username is already taken
      */
     public AppUser create(String username, String password) {
-        if (appUserRepository.findByUsername(username).isPresent()) {
-            throw new InvalidOperationException("Username '" + username + "' is already taken");
+        String trimmed = username.strip();
+        if (appUserRepository.findByUsername(trimmed).isPresent()) {
+            throw new InvalidOperationException("Username '" + trimmed + "' is already taken");
         }
         AppUser user = new AppUser();
-        user.setUsername(username.strip());
+        user.setUsername(trimmed);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setActive(true);
         return appUserRepository.save(user);

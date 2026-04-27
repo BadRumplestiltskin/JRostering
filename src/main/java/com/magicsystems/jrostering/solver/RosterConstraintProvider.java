@@ -162,8 +162,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                             return restHours < rc.getIntParam(ConstraintDefaults.KEY_MINIMUM_REST_HOURS,
                                     ConstraintDefaults.DEFAULT_MINIMUM_REST_HOURS);
                         }))
-                .penalizeLong(score,
-                        (rc, sa1, sa2) -> level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                .penalize(score,
+                        (rc, sa1, sa2) -> level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -200,9 +200,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 && rc.getConstraintLevel() == level))
                 .filter((staff, date, minutes, rc) ->
                         minutes > rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_DAY) * 60)
-                .penalizeLong(score,
+                .penalize(score,
                         (staff, date, minutes, rc) -> {
-                            long excessHours = (minutes / 60) - rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_DAY);
+                            int excessHours = (minutes / 60) - rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_DAY);
                             return level == ConstraintLevel.SOFT
                                     ? excessHours * rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT)
                                     : excessHours;
@@ -242,9 +242,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 && rc.getConstraintLevel() == level))
                 .filter((staff, weekStart, minutes, rc) ->
                         minutes > rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_WEEK) * 60)
-                .penalizeLong(score,
+                .penalize(score,
                         (staff, weekStart, minutes, rc) -> {
-                            long excessHours = (minutes / 60) - rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_WEEK);
+                            int excessHours = (minutes / 60) - rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_WEEK);
                             return level == ConstraintLevel.SOFT
                                     ? excessHours * rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT)
                                     : excessHours;
@@ -304,9 +304,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         ConstraintCollectors.countLongTri())
                 // QuadStream<Staff, LocalDate, RC, Long>
                 .filter((staff, date, rc, count) -> count >= rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_DAYS, ConstraintDefaults.DEFAULT_MAX_CONSECUTIVE_DAYS))
-                .penalizeLong(score,
+                .penalize(score,
                         (staff, date, rc, count) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -339,9 +339,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 && rc.isEnabled()
                                 && rc.getConstraintLevel() == level))
                 .filter((shift, count, rc) -> count < shift.getMinimumStaff())
-                .penalizeLong(score,
+                .penalize(score,
                         (shift, count, rc) -> {
-                            long missing = shift.getMinimumStaff() - count;
+                            int missing = shift.getMinimumStaff() - count;
                             return level == ConstraintLevel.SOFT
                                     ? missing * rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT)
                                     : missing;
@@ -388,9 +388,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         ConstraintCollectors.sumLong((rc, req, sa) -> 1L))
                 // TriStream<ShiftQualReq, RC, Long(qualifiedCount)>
                 .filter((req, rc, count) -> count < req.getMinimumCount())
-                .penalizeLong(score,
+                .penalize(score,
                         (req, rc, count) -> {
-                            long missing = req.getMinimumCount() - count;
+                            int missing = (int)(req.getMinimumCount() - count);
                             return level == ConstraintLevel.SOFT
                                     ? missing * rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT)
                                     : missing;
@@ -430,9 +430,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         Joiners.equal((rc, req, sa) -> sa.getStaff(), StaffQualification::getStaff),
                         Joiners.equal((rc, req, sa) -> req.getQualification(),
                                 StaffQualification::getQualification))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, req, sa) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -466,9 +466,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .join(ShiftAssignment.class,
                         Joiners.equal((rc, inc, saA) -> saA.getShift(), ShiftAssignment::getShift),
                         Joiners.equal((rc, inc, saA) -> inc.getStaffB(), ShiftAssignment::getStaff))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, inc, saA, saB) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -506,9 +506,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .ifNotExists(ShiftAssignment.class,
                         Joiners.equal((rc, pair, saA) -> saA.getShift(), ShiftAssignment::getShift),
                         Joiners.equal((rc, pair, saA) -> pair.getStaffB(), ShiftAssignment::getStaff))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, pair, saA) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -526,9 +526,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .ifNotExists(ShiftAssignment.class,
                         Joiners.equal((rc, pair, saB) -> saB.getShift(), ShiftAssignment::getShift),
                         Joiners.equal((rc, pair, saB) -> pair.getStaffA(), ShiftAssignment::getStaff))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, pair, saB) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(1) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(1) : 1)
                 .asConstraint(name);
     }
 
@@ -563,9 +563,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         Joiners.equal((rc, leave) -> leave.getStaff(), ShiftAssignment::getStaff),
                         Joiners.filtering((rc, leave, sa) ->
                                 sa.getStaff() != null && shiftOverlapsLeave(sa.getShift(), leave)))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, leave, sa) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -615,9 +615,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                         .isBefore(avail.getStartTime())
                                 && !sa.getShift().getEndDatetime().toLocalTime()
                                         .isAfter(avail.getEndTime())))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, sa) ->
-                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1L)
+                                level == ConstraintLevel.SOFT ? rc.weightOrDefault(ConstraintDefaults.DEFAULT_WEIGHT) : 1)
                 .asConstraint(name);
     }
 
@@ -654,9 +654,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         Joiners.equal((rc, pref) -> pref.getDayOfWeek(),
                                 sa -> sa.getShift().getStartDatetime().getDayOfWeek()),
                         Joiners.filtering((rc, pref, sa) -> sa.getStaff() != null))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, pref, sa) -> {
-                            long penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION);
+                            int penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION);
                             return level == ConstraintLevel.SOFT
                                     ? penalty * rc.weightOrDefault(ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION)
                                     : penalty;
@@ -704,9 +704,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 sa.getStaff() != null
                                 && sa.getShift().getShiftType() != null
                                 && !sa.getShift().getShiftType().equals(pref.getShiftType())))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, pref, sa) -> {
-                            long penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION);
+                            int penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION);
                             return level == ConstraintLevel.SOFT
                                     ? penalty * rc.weightOrDefault(ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION)
                                     : penalty;
@@ -731,9 +731,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 sa.getStaff() != null
                                 && sa.getShift().getShiftType() != null
                                 && sa.getShift().getShiftType().equals(pref.getShiftType())))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, pref, sa) -> {
-                            long penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION);
+                            int penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION);
                             return level == ConstraintLevel.SOFT
                                     ? penalty * rc.weightOrDefault(ConstraintDefaults.DEFAULT_PENALTY_PER_VIOLATION)
                                     : penalty;
@@ -773,9 +773,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         Joiners.equal((rc, leave) -> leave.getStaff(), ShiftAssignment::getStaff),
                         Joiners.filtering((rc, leave, sa) ->
                                 sa.getStaff() != null && shiftOverlapsLeave(sa.getShift(), leave)))
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, leave, sa) -> {
-                            long penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_REQUESTED_LEAVE);
+                            int penalty = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_PER_VIOLATION, ConstraintDefaults.DEFAULT_PENALTY_REQUESTED_LEAVE);
                             return level == ConstraintLevel.SOFT
                                     ? penalty * rc.weightOrDefault(ConstraintDefaults.DEFAULT_PENALTY_REQUESTED_LEAVE)
                                     : penalty;
@@ -822,12 +822,12 @@ public class RosterConstraintProvider implements ConstraintProvider {
                            && rc.isEnabled()
                            && rc.getConstraintLevel() == level)
                 .join(staffMinutesMap)
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, minutesMap) -> {
                             int maxDeviationMins = rc.getIntParam(ConstraintDefaults.KEY_MAX_DEVIATION_HOURS, ConstraintDefaults.DEFAULT_MAX_DEVIATION_HOURS) * 60;
                             long excess = spreadMinutes(minutesMap) - maxDeviationMins;
-                            if (excess <= 0) return 0L;
-                            long excessHours = excess / 60;
+                            if (excess <= 0) return 0;
+                            int excessHours = (int)(excess / 60);
                             return level == ConstraintLevel.SOFT
                                     ? excessHours * rc.weightOrDefault(ConstraintDefaults.DEFAULT_FAIR_HOURS_WEIGHT)
                                     : excessHours;
@@ -870,14 +870,14 @@ public class RosterConstraintProvider implements ConstraintProvider {
                            && rc.isEnabled()
                            && rc.getConstraintLevel() == level)
                 .join(staffWeekendMap)
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, countMap) -> {
                             int maxDeviation = rc.getIntParam(ConstraintDefaults.KEY_MAX_DEVIATION_SHIFTS, ConstraintDefaults.DEFAULT_MAX_DEVIATION_SHIFTS);
                             long excess = spreadCount(countMap) - maxDeviation;
-                            if (excess <= 0) return 0L;
-                            return level == ConstraintLevel.SOFT
+                            if (excess <= 0) return 0;
+                            return (int)(level == ConstraintLevel.SOFT
                                     ? excess * rc.weightOrDefault(ConstraintDefaults.DEFAULT_FAIR_SHIFT_WEIGHT)
-                                    : excess;
+                                    : excess);
                         })
                 .asConstraint(name);
     }
@@ -918,14 +918,14 @@ public class RosterConstraintProvider implements ConstraintProvider {
                            && rc.isEnabled()
                            && rc.getConstraintLevel() == level)
                 .join(staffNightMap)
-                .penalizeLong(score,
+                .penalize(score,
                         (rc, countMap) -> {
                             int maxDeviation = rc.getIntParam(ConstraintDefaults.KEY_MAX_DEVIATION_SHIFTS, ConstraintDefaults.DEFAULT_MAX_DEVIATION_SHIFTS);
                             long excess = spreadCount(countMap) - maxDeviation;
-                            if (excess <= 0) return 0L;
-                            return level == ConstraintLevel.SOFT
+                            if (excess <= 0) return 0;
+                            return (int)(level == ConstraintLevel.SOFT
                                     ? excess * rc.weightOrDefault(ConstraintDefaults.DEFAULT_FAIR_SHIFT_WEIGHT)
-                                    : excess;
+                                    : excess);
                         })
                 .asConstraint(name);
     }
@@ -961,10 +961,10 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 && rc.isEnabled()
                                 && rc.getConstraintLevel() == level))
                 .filter((shift, count, rc) -> count < shift.getMinimumStaff())
-                .penalizeLong(score,
+                .penalize(score,
                         (shift, count, rc) -> {
-                            long missing = shift.getMinimumStaff() - count;
-                            long perStaff = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_MISSING_STAFF, ConstraintDefaults.DEFAULT_PENALTY_MISSING_STAFF);
+                            int missing = shift.getMinimumStaff() - count;
+                            int perStaff = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_MISSING_STAFF, ConstraintDefaults.DEFAULT_PENALTY_MISSING_STAFF);
                             return level == ConstraintLevel.SOFT
                                     ? missing * perStaff * rc.weightOrDefault(ConstraintDefaults.DEFAULT_PENALTY_MISSING_STAFF)
                                     : missing * perStaff;
@@ -1002,10 +1002,10 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 && rc.isEnabled()
                                 && rc.getConstraintLevel() == level))
                 .filter((shift, count, rc) -> count > shift.getMinimumStaff())
-                .penalizeLong(score,
+                .penalize(score,
                         (shift, count, rc) -> {
-                            long excess = count - shift.getMinimumStaff();
-                            long perStaff = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_EXTRA_STAFF, ConstraintDefaults.DEFAULT_PENALTY_EXTRA_STAFF);
+                            int excess = count - shift.getMinimumStaff();
+                            int perStaff = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_EXTRA_STAFF, ConstraintDefaults.DEFAULT_PENALTY_EXTRA_STAFF);
                             return level == ConstraintLevel.SOFT
                                     ? excess * perStaff * rc.weightOrDefault(ConstraintDefaults.DEFAULT_PENALTY_EXTRA_STAFF)
                                     : excess * perStaff;
@@ -1064,9 +1064,9 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 // QuadStream<Staff, LocalDate, RC, Long>
                 .filter((staff, date, rc, count) ->
                         count >= rc.getIntParam(ConstraintDefaults.KEY_PREFERRED_MAX_DAYS, ConstraintDefaults.DEFAULT_PREFERRED_MAX_DAYS))
-                .penalizeLong(score,
+                .penalize(score,
                         (staff, date, rc, count) -> {
-                            long perDay = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_EXTRA_DAY, ConstraintDefaults.DEFAULT_PENALTY_EXTRA_DAY);
+                            int perDay = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_EXTRA_DAY, ConstraintDefaults.DEFAULT_PENALTY_EXTRA_DAY);
                             return level == ConstraintLevel.SOFT
                                     ? perDay * rc.weightOrDefault(ConstraintDefaults.DEFAULT_FAIR_SHIFT_WEIGHT)
                                     : perDay;
@@ -1106,10 +1106,10 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                 && rc.getConstraintLevel() == level))
                 .filter((staff, minutes, rc) ->
                         minutes > rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_PERIOD) * 60)
-                .penalizeLong(score,
+                .penalize(score,
                         (staff, minutes, rc) -> {
-                            long excessHours = (minutes / 60) - rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_PERIOD);
-                            long perHour = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_EXTRA_HOUR, ConstraintDefaults.DEFAULT_PENALTY_EXTRA_HOUR);
+                            int excessHours = (minutes / 60) - rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_HOURS, ConstraintDefaults.DEFAULT_MAX_HOURS_PER_PERIOD);
+                            int perHour = rc.getIntParam(ConstraintDefaults.KEY_PENALTY_EXTRA_HOUR, ConstraintDefaults.DEFAULT_PENALTY_EXTRA_HOUR);
                             return level == ConstraintLevel.SOFT
                                     ? excessHours * perHour * rc.weightOrDefault(ConstraintDefaults.DEFAULT_FAIR_HOURS_WEIGHT)
                                     : excessHours * perHour;
