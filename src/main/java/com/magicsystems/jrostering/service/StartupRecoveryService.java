@@ -3,6 +3,7 @@ package com.magicsystems.jrostering.service;
 import com.magicsystems.jrostering.domain.RosterPeriodStatus;
 import com.magicsystems.jrostering.domain.SolverJob;
 import com.magicsystems.jrostering.domain.SolverJobStatus;
+import com.magicsystems.jrostering.repository.OrganisationRepository;
 import com.magicsystems.jrostering.repository.SolverJobRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -38,10 +39,13 @@ import java.util.List;
 @Slf4j
 public class StartupRecoveryService implements ApplicationListener<ApplicationReadyEvent> {
 
-    private final SolverJobRepository solverJobRepository;
+    private final SolverJobRepository   solverJobRepository;
+    private final OrganisationRepository organisationRepository;
 
-    public StartupRecoveryService(SolverJobRepository solverJobRepository) {
-        this.solverJobRepository = solverJobRepository;
+    public StartupRecoveryService(SolverJobRepository solverJobRepository,
+                                   OrganisationRepository organisationRepository) {
+        this.solverJobRepository   = solverJobRepository;
+        this.organisationRepository = organisationRepository;
     }
 
     /**
@@ -52,7 +56,25 @@ public class StartupRecoveryService implements ApplicationListener<ApplicationRe
      */
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
+        verifyOrganisationExists();
         recoverOrphanedSolverJobs();
+    }
+
+    /**
+     * Verifies that the seeded organisation row exists (inserted by Flyway V3).
+     * Logs an error if missing so the operator can diagnose a failed migration
+     * before any user interaction produces a confusing NullPointerException.
+     */
+    @Transactional(readOnly = true)
+    public void verifyOrganisationExists() {
+        long count = organisationRepository.count();
+        if (count == 0) {
+            log.error("STARTUP CHECK FAILED: No organisation row found in the database. "
+                    + "Flyway migration V3__seed_organisation.sql may not have run. "
+                    + "The application will start but all organisation-scoped operations will fail.");
+        } else {
+            log.info("Startup check: organisation row present (count={}).", count);
+        }
     }
 
     /**
