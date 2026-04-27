@@ -145,6 +145,12 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring Boot Actuator — health, info, metrics endpoints -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- ===============================================================
              Test dependencies
              =============================================================== -->
@@ -157,6 +163,13 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Timefold ConstraintVerifier — unit-test individual constraints -->
+        <dependency>
+            <groupId>ai.timefold.solver</groupId>
+            <artifactId>timefold-solver-test</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -205,17 +218,5 @@
         </plugins>
     </build>
 
-    <!-- ===================================================================
-         Vaadin add-on repository (required for Vaadin 24 snapshot/release)
-         =================================================================== -->
-    <repositories>
-        <repository>
-            <id>vaadin-releases</id>
-            <url>https://maven.vaadin.com/vaadin-prereleases</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
 </project>

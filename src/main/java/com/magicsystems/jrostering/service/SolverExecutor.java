@@ -1,8 +1,10 @@
 package com.magicsystems.jrostering.service;
 
+import ai.timefold.solver.core.api.score.ScoreManager;
 import ai.timefold.solver.core.api.score.buildin.hardmediumsoft.HardMediumSoftScore;
 import ai.timefold.solver.core.api.solver.Solver;
 import ai.timefold.solver.core.api.solver.SolverFactory;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.magicsystems.jrostering.solver.RosterSolution;
 import com.magicsystems.jrostering.solver.RosterSolutionMapper;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -44,9 +47,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class SolverExecutor {
 
-    private final SolverFactory<RosterSolution> solverFactory;
-    private final RosterSolutionMapper          solutionMapper;
-    private final SolverTransactionHelper       txHelper;
+    private final SolverFactory<RosterSolution>                    solverFactory;
+    private final ScoreManager<RosterSolution, HardMediumSoftScore> scoreManager;
+    private final RosterSolutionMapper                              solutionMapper;
+    private final SolverTransactionHelper                           txHelper;
+    private final ObjectMapper                                      objectMapper;
 
     /**
      * Active {@link Solver} instances keyed by roster period ID.
@@ -193,11 +198,12 @@ public class SolverExecutor {
 
         // Step 4 — persist result
         boolean wasCancelled = cancelRequested.remove(rosterPeriodId);
+        String violationJson = buildViolationJson(result);
 
         if (wasCancelled) {
-            txHelper.persistCancelled(solverJobId, rosterPeriodId, result);
+            txHelper.persistCancelled(solverJobId, rosterPeriodId, result, violationJson);
         } else {
-            persistFinalResult(solverJobId, rosterPeriodId, result);
+            persistFinalResult(solverJobId, rosterPeriodId, result, violationJson);
         }
     }
 
@@ -210,15 +216,45 @@ public class SolverExecutor {
      * and delegates to the appropriate {@link SolverTransactionHelper} method.
      */
     private void persistFinalResult(Long solverJobId, Long rosterPeriodId,
-                                    RosterSolution result) {
+                                    RosterSolution result, String violationJson) {
         HardMediumSoftScore score = result.getScore();
         boolean feasible = score.hardScore() == 0 && score.mediumScore() == 0;
 
         if (feasible) {
-            txHelper.persistCompleted(solverJobId, rosterPeriodId, result);
+            txHelper.persistCompleted(solverJobId, rosterPeriodId, result, violationJson);
         } else {
             String reason = buildInfeasibleReason(score);
-            txHelper.persistInfeasible(solverJobId, rosterPeriodId, result, reason);
+            txHelper.persistInfeasible(solverJobId, rosterPeriodId, result, reason, violationJson);
+        }
+    }
+
+    /**
+     * Extracts per-constraint violation totals from the solved solution using
+     * Timefold's {@link ScoreManager} and serialises them as a JSON array.
+     *
+     * <p>Only constraints with at least one violation (non-zero score contribution)
+     * are included.  Failures are caught so that a scoring error never prevents
+     * the result from being persisted.</p>
+     */
+    private String buildViolationJson(RosterSolution result) {
+        try {
+            var explanation = scoreManager.explainScore(result);
+            var entries = explanation.getConstraintMatchTotalMap().values().stream()
+                    .filter(total -> {
+                        HardMediumSoftScore s = total.getScore();
+                        return s.hardScore() != 0 || s.mediumScore() != 0 || s.softScore() != 0;
+                    })
+                    .map(total -> new ViolationEntry(
+                            total.getConstraintRef().getConstraintName(),
+                            total.getScore().toString(),
+                            total.getConstraintMatchSet().size()
+                    ))
+                    .toList();
+            return objectMapper.writeValueAsString(entries);
+        } catch (Exception e) {
+            log.warn("Could not extract constraint violation detail — report will be empty: {}",
+                    e.getMessage());
+            return "[]";
         }
     }
 
@@ -241,4 +277,6 @@ public class SolverExecutor {
         sb.append(". Score: ").append(score);
         return sb.toString();
     }
+
+    private record ViolationEntry(String constraintName, String score, int violations) {}
 }

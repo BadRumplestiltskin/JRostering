@@ -100,12 +100,14 @@ public class SolverTransactionHelper {
      * transitions the period to {@link RosterPeriodStatus#SOLVED}, transitions
      * the job to {@link SolverJobStatus#COMPLETED}, and fires a completion notification.
      *
-     * @param solverJobId    the ID of the solver job to finalise
-     * @param rosterPeriodId the ID of the roster period to mark SOLVED
-     * @param result         the feasible solution returned by the solver
+     * @param solverJobId         the ID of the solver job to finalise
+     * @param rosterPeriodId      the ID of the roster period to mark SOLVED
+     * @param result              the feasible solution returned by the solver
+     * @param violationDetailJson per-constraint violation breakdown as a JSON array string
      */
     @Transactional
-    public void persistCompleted(Long solverJobId, Long rosterPeriodId, RosterSolution result) {
+    public void persistCompleted(Long solverJobId, Long rosterPeriodId,
+                                 RosterSolution result, String violationDetailJson) {
         solutionMapper.persistSolution(result);
 
         SolverJob    job    = requireJob(solverJobId);
@@ -113,6 +115,7 @@ public class SolverTransactionHelper {
 
         job.setStatus(SolverJobStatus.COMPLETED);
         job.setFinalScore(result.getScore().toString());
+        job.setViolationDetailJson(violationDetailJson);
         job.setCompletedAt(OffsetDateTime.now());
         solverJobRepository.save(job);
 
@@ -128,14 +131,16 @@ public class SolverTransactionHelper {
      * {@link RosterPeriodStatus#INFEASIBLE}, transitions the job to
      * {@link SolverJobStatus#INFEASIBLE}, and fires an infeasibility notification.
      *
-     * @param solverJobId    the ID of the solver job to finalise
-     * @param rosterPeriodId the ID of the roster period to mark INFEASIBLE
-     * @param result         the best solution found (score has negative hard or medium component)
-     * @param reason         human-readable explanation of the infeasibility
+     * @param solverJobId         the ID of the solver job to finalise
+     * @param rosterPeriodId      the ID of the roster period to mark INFEASIBLE
+     * @param result              the best solution found (score has negative hard or medium component)
+     * @param reason              human-readable explanation of the infeasibility
+     * @param violationDetailJson per-constraint violation breakdown as a JSON array string
      */
     @Transactional
     public void persistInfeasible(Long solverJobId, Long rosterPeriodId,
-                                  RosterSolution result, String reason) {
+                                  RosterSolution result, String reason,
+                                  String violationDetailJson) {
         solutionMapper.persistSolution(result);
 
         SolverJob    job    = requireJob(solverJobId);
@@ -144,6 +149,7 @@ public class SolverTransactionHelper {
         job.setStatus(SolverJobStatus.INFEASIBLE);
         job.setFinalScore(result.getScore().toString());
         job.setInfeasibleReason(reason);
+        job.setViolationDetailJson(violationDetailJson);
         job.setCompletedAt(OffsetDateTime.now());
         solverJobRepository.save(job);
 
@@ -158,12 +164,14 @@ public class SolverTransactionHelper {
      * reverts the period to {@link RosterPeriodStatus#DRAFT}, transitions the job to
      * {@link SolverJobStatus#CANCELLED}, and fires a cancellation notification.
      *
-     * @param solverJobId    the ID of the solver job to finalise
-     * @param rosterPeriodId the ID of the roster period to revert to DRAFT
-     * @param result         the best solution found before cancellation
+     * @param solverJobId         the ID of the solver job to finalise
+     * @param rosterPeriodId      the ID of the roster period to revert to DRAFT
+     * @param result              the best solution found before cancellation
+     * @param violationDetailJson per-constraint violation breakdown as a JSON array string
      */
     @Transactional
-    public void persistCancelled(Long solverJobId, Long rosterPeriodId, RosterSolution result) {
+    public void persistCancelled(Long solverJobId, Long rosterPeriodId,
+                                 RosterSolution result, String violationDetailJson) {
         solutionMapper.persistSolution(result);
 
         SolverJob    job    = requireJob(solverJobId);
@@ -171,6 +179,7 @@ public class SolverTransactionHelper {
 
         job.setStatus(SolverJobStatus.CANCELLED);
         job.setFinalScore(result.getScore().toString());
+        job.setViolationDetailJson(violationDetailJson);
         job.setCompletedAt(OffsetDateTime.now());
         solverJobRepository.save(job);
 
@@ -198,7 +207,7 @@ public class SolverTransactionHelper {
                 rosterPeriodId, solverJobId, cause.getMessage(), cause);
 
         job.setStatus(SolverJobStatus.FAILED);
-        job.setErrorMessage(truncate(cause.getMessage(), 1000));
+        job.setErrorMessage(truncate(buildErrorMessage(cause), 1000));
         job.setCompletedAt(OffsetDateTime.now());
         solverJobRepository.save(job);
 
@@ -220,6 +229,32 @@ public class SolverTransactionHelper {
     private RosterPeriod requirePeriod(Long rosterPeriodId) {
         return rosterPeriodRepository.findById(rosterPeriodId)
                 .orElseThrow(() -> EntityNotFoundException.of("RosterPeriod", rosterPeriodId));
+    }
+
+    /**
+     * Builds a human-readable error message that includes the root-cause chain,
+     * each formatted as {@code ExceptionType: message}. Stops when a cause is
+     * repeated or the chain exceeds five levels. The full stack trace is logged
+     * separately at ERROR level before this truncated summary is stored in the DB.
+     */
+    private static String buildErrorMessage(Throwable cause) {
+        StringBuilder sb = new StringBuilder();
+        Throwable current = cause;
+        int depth = 0;
+        while (current != null && depth < 5) {
+            if (depth > 0) {
+                sb.append(" | caused by: ");
+            }
+            sb.append(current.getClass().getSimpleName());
+            if (current.getMessage() != null) {
+                sb.append(": ").append(current.getMessage());
+            }
+            Throwable next = current.getCause();
+            if (next == current) break;
+            current = next;
+            depth++;
+        }
+        return sb.toString();
     }
 
     /**

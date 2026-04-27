@@ -1,6 +1,6 @@
 # Universal Staff Rostering Application — Architecture & Data Model
 
-**Version:** 1.3  
+**Version:** 1.4  
 **Date:** April 2026  
 **Status:** Implementation In Progress — Step 3 (Solver Infrastructure) Complete  
 
@@ -436,14 +436,18 @@ CHECK  (staff_a_id < staff_b_id)   -- canonical ordering prevents duplicate pair
 
 Recurring weekly availability windows per staff member.
 
+**Overnight windows are not supported.** `end_time` must be strictly after `start_time`. Availability that crosses midnight (e.g. 22:00–06:00) cannot be represented with a `TIME` column pair without a date component. Night-shift staff should declare their availability as separate same-day windows (e.g. 22:00–23:59 and 00:00–06:00) or use the full-day form. This limitation is enforced at both the database level (CHECK constraint, V2 migration) and the service layer (`StaffService.addAvailability`).
+
 ```sql
-id               BIGSERIAL        PRIMARY KEY
-staff_id         BIGINT           NOT NULL  REFERENCES STAFF(id)
-day_of_week      VARCHAR(20)      NOT NULL  -- MONDAY | TUESDAY | ... | SUNDAY
-start_time       TIME             NOT NULL
-end_time         TIME             NOT NULL
-available        BOOLEAN          NOT NULL  DEFAULT true
-created_at       TIMESTAMPTZ      NOT NULL
+id          BIGSERIAL   PRIMARY KEY
+staff_id    BIGINT      NOT NULL  REFERENCES STAFF(id)
+day_of_week VARCHAR(20) NOT NULL  -- MONDAY | TUESDAY | ... | SUNDAY
+start_time  TIME        NOT NULL
+end_time    TIME        NOT NULL
+available   BOOLEAN     NOT NULL  DEFAULT true
+created_at  TIMESTAMPTZ NOT NULL
+
+CHECK (end_time > start_time)    -- V2; overnight windows not supported
 ```
 
 ---
@@ -451,6 +455,8 @@ created_at       TIMESTAMPTZ      NOT NULL
 ### 5.12 STAFF_PREFERENCE
 
 Stores staff scheduling preferences used by soft constraint rules. A staff member may have multiple preferences of different types. `day_of_week` is populated for `PREFERRED_DAY_OFF` preferences; `shift_type_id` is populated for shift type preferences. The check constraint enforces that exactly one of the two fields is populated per preference type.
+
+Duplicate preferences (same staff member, same type, same day or shift type) are prevented by partial unique indices (V2 migration) and by a service-layer check in `StaffService.addPreference`. Without these guards, duplicate rows would double-count soft penalties in the constraint provider.
 
 ```sql
 id                BIGSERIAL       PRIMARY KEY
@@ -470,6 +476,16 @@ CHECK (
       AND shift_type_id IS NOT NULL
       AND day_of_week IS NULL)
 )
+
+-- V2: partial unique indices (standard UNIQUE cannot enforce these because of the
+-- NULL column in each pattern; PostgreSQL partial indices are required)
+CREATE UNIQUE INDEX uq_staff_pref_day_off
+    ON staff_preference (staff_id, day_of_week)
+    WHERE preference_type = 'PREFERRED_DAY_OFF';
+
+CREATE UNIQUE INDEX uq_staff_pref_shift_type
+    ON staff_preference (staff_id, preference_type, shift_type_id)
+    WHERE preference_type IN ('PREFERRED_SHIFT_TYPE', 'AVOID_SHIFT_TYPE');
 ```
 
 ---
@@ -477,6 +493,12 @@ CHECK (
 ### 5.13 LEAVE
 
 Specific date-range leave requests and approvals. The `STAFF_LEAVE_BLOCK` hard rule applies to `APPROVED` status only. The `HONOUR_REQUESTED_LEAVE` soft rule applies to `REQUESTED` status only.
+
+**Overlap validation is enforced at the service layer** (`StaffService`):
+- `addLeave` rejects a new REQUESTED leave if an existing REQUESTED or APPROVED leave for the same staff member overlaps the requested date range.
+- `updateLeaveStatus` rejects an approval if an existing APPROVED leave for the same staff member already overlaps the period being approved.
+
+No database-level EXCLUDE constraint is used (it would require the `btree_gist` extension which adds an operational dependency). Service-layer validation is sufficient given the single-user, synchronous data entry model.
 
 ```sql
 id               BIGSERIAL        PRIMARY KEY
@@ -594,21 +616,35 @@ updated_at       TIMESTAMPTZ      NOT NULL
 
 Tracks the lifecycle of each asynchronous solve operation. On an `INFEASIBLE` result, `final_score` records the score of the best partial solution (which will contain negative hard score values). On a `FAILED` result, `error_message` is populated. Orphaned jobs in `RUNNING` or `QUEUED` status at application startup are resolved by `StartupRecoveryService` (see Section 11).
 
+The most recently created job for a roster period (ordered by `created_at DESC`) is the authoritative current job shown in the UI. A period may accumulate multiple jobs across successive solve/cancel/re-solve cycles; `SolverJobRepository.findTopByRosterPeriodIdOrderByCreatedAtDesc` identifies the current one.
+
 ```sql
-id                   BIGSERIAL       PRIMARY KEY
-roster_period_id     BIGINT          NOT NULL  REFERENCES ROSTER_PERIOD(id)
-status               VARCHAR(50)     NOT NULL  -- QUEUED | RUNNING | COMPLETED |
-                                              --   CANCELLED | FAILED | INFEASIBLE
-started_at           TIMESTAMPTZ
-completed_at         TIMESTAMPTZ
-time_limit_seconds   INTEGER         NOT NULL
-final_score          VARCHAR(100)              -- e.g. "0hard/-3medium/-42soft"
-                                              --   or "-2hard/0medium/-10soft" when INFEASIBLE
-infeasible_reason    TEXT                      -- populated when status = INFEASIBLE
-error_message        TEXT                      -- populated when status = FAILED
-created_at           TIMESTAMPTZ     NOT NULL
-updated_at           TIMESTAMPTZ     NOT NULL
+id                    BIGSERIAL       PRIMARY KEY
+roster_period_id      BIGINT          NOT NULL  REFERENCES ROSTER_PERIOD(id)
+status                VARCHAR(50)     NOT NULL  -- QUEUED | RUNNING | COMPLETED |
+                                               --   CANCELLED | FAILED | INFEASIBLE
+started_at            TIMESTAMPTZ
+completed_at          TIMESTAMPTZ
+time_limit_seconds    INTEGER         NOT NULL
+final_score           VARCHAR(100)              -- e.g. "0hard/-3medium/-42soft"
+                                               --   or "-2hard/0medium/-10soft" when INFEASIBLE
+infeasible_reason     TEXT                      -- populated when status = INFEASIBLE
+error_message         TEXT                      -- populated when status = FAILED
+violation_detail_json JSONB                     -- V2; per-constraint violation breakdown;
+                                               --   populated on COMPLETED, INFEASIBLE, CANCELLED
+                                               --   by SolverTransactionHelper via ScoreManager
+created_at            TIMESTAMPTZ     NOT NULL
+updated_at            TIMESTAMPTZ     NOT NULL
 ```
+
+`violation_detail_json` stores a JSON array of constraint match totals extracted by `SolverExecutor.buildViolationJson()` using Timefold's `ScoreManager.explainScore()`. Only constraints with at least one violation are included. Example:
+```json
+[
+  {"constraintName": "MIN_STAFF_PER_SHIFT",  "score": "0hard/0medium/-3soft", "violations": 3},
+  {"constraintName": "PREFERRED_DAYS_OFF",   "score": "0hard/0medium/-2soft", "violations": 2}
+]
+```
+This is the data source for the Rule Violation Summary Excel report (§12).
 
 ---
 
@@ -814,12 +850,21 @@ These cross-site assignments are projected into a lightweight `CrossSiteBlocking
 | Cancelled solve | Preserve best solution found so far | Consistent with infeasible handling; manager retains partial work |
 | Slot pre-creation | Auto-created by RosterService on Shift save | No separate prepare step; slot count is reconciled when minimum_staff changes |
 | Multi-period linking | previous_period_id FK on RosterPeriod | Explicit, queryable relationship; sequence_number retained as display convenience only |
+| Current SolverJob identification | findTopByRosterPeriodIdOrderByCreatedAtDesc | A period can accumulate multiple jobs across solve/cancel/re-solve cycles; most-recent by created_at is the authoritative current job |
+| Organisation bootstrapping | Flyway V3 seed migration (single row, renameable in UI) | Ensures the required Organisation root row exists before any user interaction; avoids a first-run setup screen |
+| Violation detail storage | violation_detail_json JSONB on SOLVER_JOB | Captures per-constraint breakdown at solve time via ScoreManager; enables Rule Violation Summary report without re-solving |
 | Staff preferences | STAFF_PREFERENCE table + SHIFT_TYPE reference entity | Provides stable, typed reference for soft constraint evaluation |
 | Cross-site blocking | CrossSiteBlockingPeriod injected as hard problem facts | Prevents double-booking across sites without requiring a global solver |
 | Approved leave | Hard constraint (STAFF_LEAVE_BLOCK) | Approved leave is never violated under any circumstances |
 | Requested leave | Soft constraint (HONOUR_REQUESTED_LEAVE) | Respected where possible; breakable when necessary |
 | Availability enforcement | Configurable HARD (default) or MEDIUM per site | Organisations differ on whether declared availability is absolute or advisory |
+| Overnight availability | Not supported (CHECK end_time > start_time) | TIME columns cannot represent cross-midnight ranges unambiguously without a date component; service-layer validation gives a clear error |
+| Leave overlap validation | Service-layer check (no DB EXCLUDE constraint) | btree_gist extension adds an operational dependency not warranted for single-user synchronous data entry |
+| Preference uniqueness | Partial unique indices + service-layer check | Standard UNIQUE cannot enforce partial conditions across NULL columns; partial indices are the correct PostgreSQL mechanism |
+| STAFF_PREFERENCE duplicates | Prevented by service-layer check before DB insert | Duplicate rows double-count soft penalties in the constraint provider |
 | Authentication | Spring Security form-based (Vaadin) + HTTP Basic (REST) | Natural fit for single-organisation, low-concurrency deployment |
+| HTTPS | Required for server deployments; not required for localhost | HTTP Basic sends credentials in cleartext without TLS; TLS is delegated to a reverse proxy |
+| Brute-force protection | In-memory per-username lockout (LoginAttemptService) | 5 failures → 15-minute lock; in-memory is sufficient for single-PC deployment; avoids APP_USER schema change |
 | User storage | APP_USER table with bcrypt | Self-contained; no credential hardcoding in properties files |
 | Database migration | Flyway | SQL-native; auto-runs on startup; minimal overhead for single-developer project |
 | Startup recovery | StartupRecoveryService on ApplicationReadyEvent | Clears orphaned RUNNING/QUEUED jobs to FAILED on restart; resets RosterPeriod to DRAFT |
@@ -842,11 +887,19 @@ Spring Security provides authentication for both the Vaadin UI and the REST API 
 
 User credentials are stored in the `APP_USER` table. Passwords are stored as bcrypt hashes. Spring Security's `UserDetailsService` is backed by `AppUserRepository`.
 
-### 9.2 Authorisation
+**HTTPS is required for server deployments.** HTTP Basic transmits credentials as Base64-encoded plaintext. Without TLS, credentials are exposed to any observer on the network path. In single-PC mode (browser → localhost), TLS is not required because the connection never leaves the machine. In server mode, a reverse proxy (Nginx, Caddy, or similar) providing TLS termination must sit in front of the Spring Boot process. Application configuration contains no TLS-specific settings; TLS is the responsibility of the deployment environment.
+
+### 9.2 Brute-Force Login Protection
+
+`LoginAttemptService` provides in-memory per-username rate limiting. After **5 consecutive failed authentication attempts**, the account is locked for **15 minutes**. A successful login resets the counter. `AppUserDetailsService` checks the lockout before returning `UserDetails`; if the account is locked, a `LockedException` is thrown. `SecurityEventListener` listens for Spring Security `AbstractAuthenticationFailureEvent` and `AuthenticationSuccessEvent` to maintain the counter.
+
+State is in-memory: a server restart clears all lockouts. This is acceptable because an application restart is an administrative action in this single-organisation deployment model. A persistent `failed_login_attempts` counter in `APP_USER` can be added in a future version if persistent lockout is required.
+
+### 9.3 Authorisation
 
 All authenticated users have full access to all application features. Role-based access control is not required in the initial version — all users are roster managers.
 
-### 9.3 Session Handling
+### 9.4 Session Handling
 
 Vaadin manages its own server-side session. Spring Security's `HttpSessionSecurityContextRepository` binds the security context to the Vaadin session. The REST API is stateless — each request carries HTTP Basic credentials and no session is created or maintained.
 
@@ -854,9 +907,17 @@ Vaadin manages its own server-side session. Spring Security's `HttpSessionSecuri
 
 ## 10. Database Migration
 
-Flyway manages all schema changes. Migration scripts are stored under `src/main/resources/db/migration` and named using Flyway's standard versioned convention (`V1__initial_schema.sql`, `V2__description.sql`, etc.). Spring Boot auto-configures Flyway to execute pending migrations on application startup, before the application context finishes initialising.
+Flyway manages all schema changes. Migration scripts are stored under `src/main/resources/db/migration` and named using Flyway's standard versioned convention. Spring Boot auto-configures Flyway to execute pending migrations on application startup, before the application context finishes initialising. No manual DDL changes are made directly to the database outside of Flyway.
 
-The baseline migration (`V1__initial_schema.sql`) captures the complete schema defined in Section 5. All subsequent structural changes are applied as incremental versioned scripts. No manual DDL changes are made directly to the database outside of Flyway.
+| Script | Contents |
+|---|---|
+| `V1__initial_schema.sql` | Complete baseline schema as defined in Section 5 |
+| `V2__add_constraints_and_violation_detail.sql` | Partial unique indices on `STAFF_PREFERENCE`; `CHECK (end_time > start_time)` on `STAFF_AVAILABILITY`; `violation_detail_json JSONB` column on `SOLVER_JOB` |
+| `V3__seed_organisation.sql` | Seeds the single `ORGANISATION` row required for the application to function |
+
+### Organisation Bootstrapping
+
+All domain data (Staff, Sites, Qualifications, RosterPeriods) is scoped to an `Organisation`. The application requires exactly one `Organisation` row to exist before any other data can be entered. `V3__seed_organisation.sql` inserts a row named `"Default Organisation"` at startup. The roster manager can rename it via the UI after first login. The seed row's `id` value is not hardcoded anywhere in application code — the runtime always loads the organisation via `OrganisationRepository.findAll().getFirst()`.
 
 ---
 
@@ -962,9 +1023,9 @@ spring.threads.virtual.enabled=true
 
 When enabled, Spring Boot mounts the `@Async` executor, the Tomcat/Jetty connector, and Spring Security's filter chain on virtual threads rather than platform threads. This is beneficial for this application because:
 
-- The Timefold solver runs on a `@Async` background thread. Virtual threads have no pinning risk here — the solver is CPU-bound, not IO-blocked.
+- The Timefold solver runs on a `@Async` background thread. Virtual thread *pinning* (where a virtual thread is pinned to its carrier thread during a `synchronized` block) carries no performance penalty for a CPU-bound workload: the carrier thread is actively computing, not blocked on IO. If Timefold's internals use `synchronized` — common in Java libraries — pinning occurs but the carrier thread remains productive, so throughput is unaffected.
 - The web layer (Vaadin + REST) handles one roster manager at a time. Platform threads are not a scalability bottleneck, but virtual threads carry no cost either.
-- Virtual threads eliminate the `ScheduledExecutorService` daemon thread overhead for the time-limit scheduler (though the daemon scheduler is retained because `ScheduledExecutorService` does not natively run on virtual threads in Java 25).
+- The `ScheduledExecutorService` daemon thread for time-limit signals is retained because `ScheduledExecutorService` does not natively dispatch on virtual threads in Java 25. The daemon thread issue is independent of the virtual thread configuration.
 
 **Status:** `spring.threads.virtual.enabled=true` is set in `application.properties`.
 

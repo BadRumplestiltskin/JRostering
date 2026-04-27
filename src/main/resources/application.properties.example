@@ -1,0 +1,31 @@
+# =============================================================================
+# JRostering — Configuration Example
+# =============================================================================
+# Copy this file to application.properties (or use environment variables) and
+# fill in the required values marked with <angle-brackets>.
+# application.properties is .gitignored when it contains secrets.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# DataSource — PostgreSQL 16.x
+# Set these via environment variables to keep secrets out of source control.
+# -----------------------------------------------------------------------------
+DB_URL=jdbc:postgresql://localhost:5432/jrostering
+DB_USERNAME=jrostering
+DB_PASSWORD=<your-db-password>
+
+# Or set them directly in application.properties (do not commit the password):
+# spring.datasource.url=jdbc:postgresql://localhost:5432/jrostering
+# spring.datasource.username=jrostering
+# spring.datasource.password=<your-db-password>
+
+# -----------------------------------------------------------------------------
+# Server
+# -----------------------------------------------------------------------------
+server.port=8080
+
+# -----------------------------------------------------------------------------
+# Active Spring profile
+# Use 'dev' locally, 'prod' in production.
+# -----------------------------------------------------------------------------
+spring.profiles.active=dev

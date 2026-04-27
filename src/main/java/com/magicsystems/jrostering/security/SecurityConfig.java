@@ -61,6 +61,10 @@ public class SecurityConfig {
                     "/sw.js",
                     "/offline.html"
                 ).permitAll()
+                // Actuator health is public so load-balancers can probe it without credentials;
+                // other actuator endpoints require authentication.
+                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/**").authenticated()
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Repository for {@link Leave} entities.
@@ -39,6 +40,33 @@ public interface LeaveRepository extends JpaRepository<Leave, Long> {
             @Param("status")      LeaveStatus status,
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd")   LocalDate periodEnd
+    );
+
+    /**
+     * Returns all non-REJECTED leave records for the given staff member that overlap the
+     * specified date range, excluding a specific leave ID (pass {@code null} to exclude nothing).
+     *
+     * <p>Used by {@code StaffService} to detect overlapping leave before saving:</p>
+     * <ul>
+     *   <li>On {@code addLeave}: checks REQUESTED or APPROVED overlap (excludeId = null).</li>
+     *   <li>On {@code updateLeaveStatus} to APPROVED: checks existing APPROVED overlap
+     *       (excludeId = the leave being approved, statuses = [APPROVED]).</li>
+     * </ul>
+     */
+    @Query("""
+            SELECT l FROM Leave l
+             WHERE l.staff = :staff
+               AND l.status IN :statuses
+               AND l.startDate <= :endDate
+               AND l.endDate   >= :startDate
+               AND (:excludeId IS NULL OR l.id <> :excludeId)
+            """)
+    List<Leave> findOverlapping(
+            @Param("staff")     Staff staff,
+            @Param("statuses")  Set<LeaveStatus> statuses,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate")   LocalDate endDate,
+            @Param("excludeId") Long excludeId
     );
 
     /**

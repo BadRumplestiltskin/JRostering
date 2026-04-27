@@ -2,7 +2,9 @@ package com.magicsystems.jrostering.service;
 
 import com.magicsystems.jrostering.domain.RosterPeriod;
 import com.magicsystems.jrostering.domain.SolverJob;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,8 +27,11 @@ import org.springframework.stereotype.Service;
  * log-only implementation is inherently thread-safe.</p>
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class NotificationService {
+
+    private final ApplicationEventPublisher eventPublisher;
 
     // =========================================================================
     // Solver lifecycle events
@@ -50,6 +55,7 @@ public class NotificationService {
                 job.getFinalScore(),
                 elapsedSeconds(job)
         );
+        eventPublisher.publishEvent(new SolverLifecycleEvent.Completed(job, period));
     }
 
     /**
@@ -74,6 +80,7 @@ public class NotificationService {
                 job.getInfeasibleReason(),
                 elapsedSeconds(job)
         );
+        eventPublisher.publishEvent(new SolverLifecycleEvent.Infeasible(job, period));
     }
 
     /**
@@ -95,6 +102,7 @@ public class NotificationService {
                 job.getFinalScore(),
                 elapsedSeconds(job)
         );
+        eventPublisher.publishEvent(new SolverLifecycleEvent.Cancelled(job, period));
     }
 
     /**
@@ -116,6 +124,7 @@ public class NotificationService {
                 throwable.getMessage(),
                 throwable
         );
+        eventPublisher.publishEvent(new SolverLifecycleEvent.Failed(job, period, throwable));
     }
 
     // =========================================================================

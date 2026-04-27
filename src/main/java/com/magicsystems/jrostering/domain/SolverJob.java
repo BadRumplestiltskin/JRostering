@@ -87,6 +87,21 @@ public class SolverJob {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    /**
+     * Per-constraint violation breakdown serialised as a JSON array.
+     * Populated on {@link SolverJobStatus#COMPLETED}, {@link SolverJobStatus#INFEASIBLE},
+     * and {@link SolverJobStatus#CANCELLED} by {@code SolverTransactionHelper}
+     * using data extracted from Timefold's {@code ScoreManager} API.
+     *
+     * <p>Each element has the shape:
+     * {@code {"constraintName":"…","score":"…","violations":N}}.
+     * Only constraints with at least one violation are included.</p>
+     *
+     * <p>Used by {@code ExcelReportGenerator} to produce the Rule Violation Summary report.</p>
+     */
+    @Column(name = "violation_detail_json", columnDefinition = "jsonb")
+    private String violationDetailJson;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.EnumSet;
 import java.util.List;
 
 /**
@@ -417,14 +419,24 @@ public class StaffService {
     /**
      * Adds a recurring weekly availability window for a staff member.
      *
-     * @throws EntityNotFoundException if the staff member does not exist
+     * <p>Overnight windows crossing midnight (e.g. 22:00–06:00) are not supported.
+     * {@code endTime} must be strictly after {@code startTime}.</p>
+     *
+     * @throws EntityNotFoundException   if the staff member does not exist
+     * @throws InvalidOperationException if {@code endTime} is not after {@code startTime}
      */
     @Transactional
     public StaffAvailability addAvailability(Long staffId, DayOfWeek dayOfWeek,
-                                              java.time.LocalTime startTime,
-                                              java.time.LocalTime endTime,
+                                              LocalTime startTime,
+                                              LocalTime endTime,
                                               boolean available) {
         Staff staff = requireStaff(staffId);
+
+        if (!endTime.isAfter(startTime)) {
+            throw new InvalidOperationException(
+                    "Availability end time " + endTime + " must be strictly after start time "
+                    + startTime + ". Overnight windows crossing midnight are not supported.");
+        }
 
         StaffAvailability window = new StaffAvailability();
         window.setStaff(staff);
@@ -471,7 +483,8 @@ public class StaffService {
      *
      * @throws EntityNotFoundException   if the staff member or shift type does not exist
      * @throws InvalidOperationException if the dayOfWeek / shiftTypeId combination
-     *                                   is inconsistent with the preference type
+     *                                   is inconsistent with the preference type, or if an
+     *                                   identical preference already exists for this staff member
      */
     @Transactional
     public StaffPreference addPreference(Long staffId, PreferenceType preferenceType,
@@ -485,8 +498,23 @@ public class StaffService {
         preference.setDayOfWeek(dayOfWeek);
 
         if (shiftTypeId != null) {
-            preference.setShiftType(shiftTypeRepository.findById(shiftTypeId)
-                    .orElseThrow(() -> EntityNotFoundException.of("ShiftType", shiftTypeId)));
+            ShiftType shiftType = shiftTypeRepository.findById(shiftTypeId)
+                    .orElseThrow(() -> EntityNotFoundException.of("ShiftType", shiftTypeId));
+
+            if (staffPreferenceRepository.existsByStaffAndPreferenceTypeAndShiftType(
+                    staff, preferenceType, shiftType)) {
+                throw new InvalidOperationException(
+                        "Staff id=" + staffId + " already has a " + preferenceType
+                        + " preference for shift type id=" + shiftTypeId);
+            }
+            preference.setShiftType(shiftType);
+        } else {
+            if (staffPreferenceRepository.existsByStaffAndPreferenceTypeAndDayOfWeek(
+                    staff, preferenceType, dayOfWeek)) {
+                throw new InvalidOperationException(
+                        "Staff id=" + staffId + " already has a " + preferenceType
+                        + " preference for " + dayOfWeek);
+            }
         }
 
         return staffPreferenceRepository.save(preference);
@@ -523,7 +551,9 @@ public class StaffService {
      * Use {@link #updateLeaveStatus} to approve or reject it.
      *
      * @throws EntityNotFoundException   if the staff member does not exist
-     * @throws InvalidOperationException if {@code endDate} is before {@code startDate}
+     * @throws InvalidOperationException if {@code endDate} is before {@code startDate}, or if
+     *                                   an existing REQUESTED or APPROVED leave already overlaps
+     *                                   the requested date range for this staff member
      */
     @Transactional
     public Leave addLeave(Long staffId, LocalDate startDate, LocalDate endDate,
@@ -533,6 +563,18 @@ public class StaffService {
         if (endDate.isBefore(startDate)) {
             throw new InvalidOperationException(
                     "Leave end date " + endDate + " cannot be before start date " + startDate);
+        }
+
+        var overlapping = leaveRepository.findOverlapping(
+                staff,
+                EnumSet.of(LeaveStatus.REQUESTED, LeaveStatus.APPROVED),
+                startDate, endDate, null);
+        if (!overlapping.isEmpty()) {
+            Leave existing = overlapping.getFirst();
+            throw new InvalidOperationException(
+                    "Staff id=" + staffId + " already has " + existing.getStatus()
+                    + " leave from " + existing.getStartDate() + " to " + existing.getEndDate()
+                    + " that overlaps the requested period.");
         }
 
         Leave leave = new Leave();
@@ -549,8 +591,13 @@ public class StaffService {
      * Updates the approval status of a leave record.
      * Only valid transitions: REQUESTED → APPROVED, REQUESTED → REJECTED.
      *
+     * <p>When approving, checks that no other APPROVED leave already overlaps
+     * this date range for the same staff member.</p>
+     *
      * @throws EntityNotFoundException   if the leave record does not exist
-     * @throws InvalidOperationException if the transition is not permitted
+     * @throws InvalidOperationException if the transition is not permitted, or if
+     *                                   approving would create an overlap with existing
+     *                                   APPROVED leave for the same staff member
      */
     @Transactional
     public Leave updateLeaveStatus(Long leaveId, LeaveStatus newStatus) {
@@ -564,6 +611,21 @@ public class StaffService {
         }
         if (newStatus == LeaveStatus.REQUESTED) {
             throw new InvalidOperationException("Cannot transition leave status to REQUESTED.");
+        }
+
+        if (newStatus == LeaveStatus.APPROVED) {
+            var overlapping = leaveRepository.findOverlapping(
+                    leave.getStaff(),
+                    EnumSet.of(LeaveStatus.APPROVED),
+                    leave.getStartDate(), leave.getEndDate(), leaveId);
+            if (!overlapping.isEmpty()) {
+                Leave existing = overlapping.getFirst();
+                throw new InvalidOperationException(
+                        "Cannot approve leave id=" + leaveId + ": staff id="
+                        + leave.getStaff().getId() + " already has APPROVED leave from "
+                        + existing.getStartDate() + " to " + existing.getEndDate()
+                        + " that overlaps this period.");
+            }
         }
 
         leave.setStatus(newStatus);
