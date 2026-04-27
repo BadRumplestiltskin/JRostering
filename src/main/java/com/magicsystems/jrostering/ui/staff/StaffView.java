@@ -46,6 +46,7 @@ import java.util.Optional;
 @Route(value = "staff", layout = MainLayout.class)
 @PageTitle("Staff — JRostering")
 @PermitAll
+@SuppressWarnings("serial")
 public class StaffView extends VerticalLayout {
 
     private final StaffService                  staffService;

@@ -41,6 +41,7 @@ import java.util.Optional;
 @Route(value = "roster", layout = MainLayout.class)
 @PageTitle("Roster — JRostering")
 @PermitAll
+@SuppressWarnings("serial")
 public class RosterView extends VerticalLayout {
 
     private final SiteService            siteService;

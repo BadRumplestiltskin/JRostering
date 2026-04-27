@@ -8,6 +8,9 @@ package com.magicsystems.jrostering.service;
  */
 public class InvalidOperationException extends RuntimeException {
 
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
+
     public InvalidOperationException(String message) {
         super(message);
     }

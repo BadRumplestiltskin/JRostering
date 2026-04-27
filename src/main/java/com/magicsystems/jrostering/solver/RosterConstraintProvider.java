@@ -279,33 +279,30 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                            HardMediumSoftScore score) {
         String name = RuleType.MAX_CONSECUTIVE_DAYS.name() + "_" + level.name();
 
-        // Deduplicated (staff, date) worked days
-        var workedDays = factory.forEach(ShiftAssignment.class)
-                .filter(sa -> sa.getStaff() != null)
-                .groupBy(ShiftAssignment::getStaff,
-                        sa -> sa.getShift().getStartDatetime().toLocalDate());
-
-        // Join RC first so the maximumDays parameter is accessible in the window-join filter
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.MAX_CONSECUTIVE_DAYS
                            && rc.isEnabled()
                            && rc.getConstraintLevel() == level)
-                .join(workedDays)
-                // TriStream<RC, Staff, LocalDate(laterDate)>
-                .join(workedDays,
-                        Joiners.equal((rc, s1, d1) -> s1, (s2, d2) -> s2),
-                        Joiners.filtering((rc, s1, d1, s2, d2) -> {
-                            long diff = ChronoUnit.DAYS.between(d2, d1);
+                .join(ShiftAssignment.class,
+                        Joiners.filtering((rc, sa) -> sa.getStaff() != null))
+                // BiStream<RC, SA1>
+                .join(ShiftAssignment.class,
+                        Joiners.equal((rc, sa1) -> sa1.getStaff(), sa2 -> sa2.getStaff()),
+                        Joiners.filtering((rc, sa1, sa2) -> {
+                            if (sa2.getStaff() == null) return false;
+                            LocalDate d1 = sa1.getShift().getStartDatetime().toLocalDate();
+                            LocalDate d2 = sa2.getShift().getStartDatetime().toLocalDate();
                             int maxDays = rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_DAYS, ConstraintDefaults.DEFAULT_MAX_CONSECUTIVE_DAYS);
+                            long diff = ChronoUnit.DAYS.between(d2, d1);
                             return diff > 0 && diff <= maxDays;
                         }))
-                // QuadStream<RC, Staff, LocalDate(later), Staff(same), LocalDate(earlier)>
+                // TriStream<RC, SA1, SA2>
                 .groupBy(
-                        (rc, s1, d1, s2, d2) -> s1,
-                        (rc, s1, d1, s2, d2) -> d1,
-                        (rc, s1, d1, s2, d2) -> rc,
-                        ConstraintCollectors.sumLong((rc, s1, d1, s2, d2) -> 1L))
-                // QuadStream<Staff, LocalDate, RC, Long(priorWorkedDaysInWindow)>
+                        (rc, sa1, sa2) -> sa1.getStaff(),
+                        (rc, sa1, sa2) -> sa1.getShift().getStartDatetime().toLocalDate(),
+                        (rc, sa1, sa2) -> rc,
+                        ConstraintCollectors.countLongTri())
+                // QuadStream<Staff, LocalDate, RC, Long>
                 .filter((staff, date, rc, count) -> count >= rc.getIntParam(ConstraintDefaults.KEY_MAXIMUM_DAYS, ConstraintDefaults.DEFAULT_MAX_CONSECUTIVE_DAYS))
                 .penalizeLong(score,
                         (staff, date, rc, count) ->
@@ -816,7 +813,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         ConstraintCollectors.sum(sa -> shiftMinutes(sa.getShift())))
                 .groupBy(ConstraintCollectors.toMap(
                         (staff, mins) -> staff,
-                        (staff, mins) -> mins));
+                        (staff, mins) -> mins,
+                        (a, b) -> a));
         // UniStream<Map<Staff, Integer>>
 
         return factory.forEach(RuleConfiguration.class)
@@ -864,7 +862,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         ConstraintCollectors.count())
                 .groupBy(ConstraintCollectors.toMap(
                         (staff, count) -> staff,
-                        (staff, count) -> count));
+                        (staff, count) -> count,
+                        (a, b) -> a));
 
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.FAIR_WEEKEND_DISTRIBUTION
@@ -911,7 +910,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                         ConstraintCollectors.count())
                 .groupBy(ConstraintCollectors.toMap(
                         (staff, count) -> staff,
-                        (staff, count) -> count));
+                        (staff, count) -> count,
+                        (a, b) -> a));
 
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.FAIR_NIGHT_SHIFT_DISTRIBUTION
@@ -1038,28 +1038,30 @@ public class RosterConstraintProvider implements ConstraintProvider {
                                                       HardMediumSoftScore score) {
         String name = RuleType.AVOID_EXCESSIVE_CONSECUTIVE_DAYS.name() + "_" + level.name();
 
-        var workedDays = factory.forEach(ShiftAssignment.class)
-                .filter(sa -> sa.getStaff() != null)
-                .groupBy(ShiftAssignment::getStaff,
-                        sa -> sa.getShift().getStartDatetime().toLocalDate());
-
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.AVOID_EXCESSIVE_CONSECUTIVE_DAYS
                            && rc.isEnabled()
                            && rc.getConstraintLevel() == level)
-                .join(workedDays)
-                .join(workedDays,
-                        Joiners.equal((rc, s1, d1) -> s1, (s2, d2) -> s2),
-                        Joiners.filtering((rc, s1, d1, s2, d2) -> {
-                            long diff = ChronoUnit.DAYS.between(d2, d1);
+                .join(ShiftAssignment.class,
+                        Joiners.filtering((rc, sa) -> sa.getStaff() != null))
+                // BiStream<RC, SA1>
+                .join(ShiftAssignment.class,
+                        Joiners.equal((rc, sa1) -> sa1.getStaff(), sa2 -> sa2.getStaff()),
+                        Joiners.filtering((rc, sa1, sa2) -> {
+                            if (sa2.getStaff() == null) return false;
+                            LocalDate d1 = sa1.getShift().getStartDatetime().toLocalDate();
+                            LocalDate d2 = sa2.getShift().getStartDatetime().toLocalDate();
                             int preferredMax = rc.getIntParam(ConstraintDefaults.KEY_PREFERRED_MAX_DAYS, ConstraintDefaults.DEFAULT_PREFERRED_MAX_DAYS);
+                            long diff = ChronoUnit.DAYS.between(d2, d1);
                             return diff > 0 && diff <= preferredMax;
                         }))
+                // TriStream<RC, SA1, SA2>
                 .groupBy(
-                        (rc, s1, d1, s2, d2) -> s1,
-                        (rc, s1, d1, s2, d2) -> d1,
-                        (rc, s1, d1, s2, d2) -> rc,
-                        ConstraintCollectors.sumLong((rc, s1, d1, s2, d2) -> 1L))
+                        (rc, sa1, sa2) -> sa1.getStaff(),
+                        (rc, sa1, sa2) -> sa1.getShift().getStartDatetime().toLocalDate(),
+                        (rc, sa1, sa2) -> rc,
+                        ConstraintCollectors.countLongTri())
+                // QuadStream<Staff, LocalDate, RC, Long>
                 .filter((staff, date, rc, count) ->
                         count >= rc.getIntParam(ConstraintDefaults.KEY_PREFERRED_MAX_DAYS, ConstraintDefaults.DEFAULT_PREFERRED_MAX_DAYS))
                 .penalizeLong(score,
@@ -1121,8 +1123,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
 
     /** Returns the duration of a shift in whole minutes. */
     private static int shiftMinutes(Shift shift) {
-        return (int) Duration.between(
-                shift.getStartDatetime(), shift.getEndDatetime()).toMinutes();
+        return Math.toIntExact(Duration.between(
+                shift.getStartDatetime(), shift.getEndDatetime()).toMinutes());
     }
 
     /**

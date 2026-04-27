@@ -24,6 +24,7 @@ import java.util.List;
 @Route(value = "", layout = MainLayout.class)
 @PageTitle("Dashboard — JRostering")
 @PermitAll
+@SuppressWarnings("serial")
 public class DashboardView extends VerticalLayout {
 
     private final OrganisationRepository organisationRepository;

@@ -11,7 +11,7 @@ import com.magicsystems.jrostering.report.ExcelReportGenerator;
 import com.magicsystems.jrostering.service.RosterService;
 import com.magicsystems.jrostering.service.SiteService;
 import com.magicsystems.jrostering.ui.MainLayout;
-import com.vaadin.flow.component.anchor.Anchor;
+import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
@@ -35,6 +35,7 @@ import java.util.List;
 @Route(value = "reports", layout = MainLayout.class)
 @PageTitle("Reports — JRostering")
 @PermitAll
+@SuppressWarnings("serial")
 public class ReportView extends VerticalLayout {
 
     private final SiteService            siteService;

@@ -37,6 +37,7 @@ import java.util.Optional;
 @Route(value = "sites", layout = MainLayout.class)
 @PageTitle("Sites — JRostering")
 @PermitAll
+@SuppressWarnings("serial")
 public class SiteView extends VerticalLayout {
 
     private final SiteService            siteService;

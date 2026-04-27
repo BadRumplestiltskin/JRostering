@@ -12,6 +12,7 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 @Route("login")
 @PageTitle("Login — JRostering")
 @AnonymousAllowed
+@SuppressWarnings("serial")
 public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
     private final LoginForm loginForm = new LoginForm();

@@ -90,10 +90,13 @@ public class ExcelReportGenerator {
             writeHeaderCell(header, 2, "Total Hours", headerStyle);
             writeHeaderCell(header, 3, "Shift Detail", headerStyle);
 
-            // Group assignments by staff
+            // Group assignments by staff, sorted alphabetically by last name then first name
             Map<Staff, List<ShiftAssignment>> byStaff = assignments.stream()
-                    .collect(Collectors.groupingBy(ShiftAssignment::getStaff,
-                            TreeMap.comparingByKey(Comparator.comparing(s -> s.getLastName() + s.getFirstName()))));
+                    .collect(Collectors.groupingBy(
+                            ShiftAssignment::getStaff,
+                            () -> new TreeMap<>(Comparator.<Staff, String>comparing(
+                                    s -> s.getLastName() + s.getFirstName())),
+                            Collectors.toList()));
 
             int rowIdx = 3;
             double grandTotalHours = 0;
@@ -255,6 +258,9 @@ public class ExcelReportGenerator {
 
     /** Thrown when report generation fails due to an I/O or serialisation error. */
     public static class ReportGenerationException extends RuntimeException {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
         public ReportGenerationException(String message, Throwable cause) {
             super(message, cause);
         }

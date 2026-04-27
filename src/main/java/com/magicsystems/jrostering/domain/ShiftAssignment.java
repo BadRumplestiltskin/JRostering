@@ -55,7 +55,7 @@ public class ShiftAssignment {
      * The solver selects a value from the {@code staffRange} value range provider
      * defined in {@code RosterSolution}.</p>
      */
-    @PlanningVariable(valueRangeProviderRefs = "staffRange", nullable = true)
+    @PlanningVariable(valueRangeProviderRefs = "staffRange", allowsUnassigned = true)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "staff_id")
     private Staff staff;

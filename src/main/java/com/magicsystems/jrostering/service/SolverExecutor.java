@@ -1,6 +1,6 @@
 package com.magicsystems.jrostering.service;
 
-import ai.timefold.solver.core.api.score.ScoreManager;
+import ai.timefold.solver.core.api.solver.SolutionManager;
 import ai.timefold.solver.core.api.score.buildin.hardmediumsoft.HardMediumSoftScore;
 import ai.timefold.solver.core.api.solver.Solver;
 import ai.timefold.solver.core.api.solver.SolverFactory;
@@ -48,7 +48,7 @@ import java.util.concurrent.TimeUnit;
 public class SolverExecutor {
 
     private final SolverFactory<RosterSolution>                    solverFactory;
-    private final ScoreManager<RosterSolution, HardMediumSoftScore> scoreManager;
+    private final SolutionManager<RosterSolution, HardMediumSoftScore> scoreManager;
     private final RosterSolutionMapper                              solutionMapper;
     private final SolverTransactionHelper                           txHelper;
     private final ObjectMapper                                      objectMapper;
@@ -238,14 +238,14 @@ public class SolverExecutor {
      */
     private String buildViolationJson(RosterSolution result) {
         try {
-            var explanation = scoreManager.explainScore(result);
+            var explanation = scoreManager.explain(result);
             var entries = explanation.getConstraintMatchTotalMap().values().stream()
                     .filter(total -> {
                         HardMediumSoftScore s = total.getScore();
                         return s.hardScore() != 0 || s.mediumScore() != 0 || s.softScore() != 0;
                     })
                     .map(total -> new ViolationEntry(
-                            total.getConstraintRef().getConstraintName(),
+                            total.getConstraintRef().constraintName(),
                             total.getScore().toString(),
                             total.getConstraintMatchSet().size()
                     ))

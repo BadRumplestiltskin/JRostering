@@ -26,6 +26,7 @@ import com.vaadin.flow.spring.annotation.UIScope;
  */
 @SpringComponent
 @UIScope
+@SuppressWarnings("serial")
 public class MainLayout extends AppLayout {
 
     public MainLayout() {
