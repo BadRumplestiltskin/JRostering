@@ -33,7 +33,7 @@
         <java.version>25</java.version>
         <vaadin.version>24.7.0</vaadin.version>
         <timefold.version>1.31.0</timefold.version>
-        <poi.version>5.3.0</poi.version>
+        <poi.version>5.4.0</poi.version>
     </properties>
 
     <!-- ===================================================================
