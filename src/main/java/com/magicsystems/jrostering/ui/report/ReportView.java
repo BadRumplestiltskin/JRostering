@@ -11,13 +11,13 @@ import com.magicsystems.jrostering.report.ExcelReportGenerator;
 import com.magicsystems.jrostering.service.RosterService;
 import com.magicsystems.jrostering.service.SiteService;
 import com.magicsystems.jrostering.ui.MainLayout;
+import com.magicsystems.jrostering.ui.ViewUtils;
 import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -100,7 +100,7 @@ public class ReportView extends VerticalLayout {
         downloadBtn.addClickListener(e -> {
             RosterPeriod period = periodBox.getValue();
             if (period == null) {
-                notify("Select a roster period first.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Select a roster period first.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             try {
@@ -110,9 +110,9 @@ public class ReportView extends VerticalLayout {
                         () -> new ByteArrayInputStream(bytes));
                 downloadAnchor.setHref(resource);
                 downloadAnchor.getElement().callJsFunction("click");
-                notify("Download started.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Download started.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error generating report: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error generating report: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -150,7 +150,7 @@ public class ReportView extends VerticalLayout {
         downloadBtn.addClickListener(e -> {
             SolverJob job = jobBox.getValue();
             if (job == null) {
-                notify("Select a solver job first.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Select a solver job first.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             try {
@@ -160,9 +160,9 @@ public class ReportView extends VerticalLayout {
                         () -> new ByteArrayInputStream(bytes));
                 downloadAnchor.setHref(resource);
                 downloadAnchor.getElement().callJsFunction("click");
-                notify("Download started.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Download started.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error generating report: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error generating report: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -174,8 +174,4 @@ public class ReportView extends VerticalLayout {
     // Helpers
     // =========================================================================
 
-    private static void notify(String message, NotificationVariant variant) {
-        Notification n = Notification.show(message, 3000, Notification.Position.TOP_CENTER);
-        n.addThemeVariants(variant);
-    }
 }

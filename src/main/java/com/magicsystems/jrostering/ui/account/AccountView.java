@@ -3,6 +3,7 @@ package com.magicsystems.jrostering.ui.account;
 import com.magicsystems.jrostering.domain.AppUser;
 import com.magicsystems.jrostering.service.AppUserService;
 import com.magicsystems.jrostering.ui.MainLayout;
+import com.magicsystems.jrostering.ui.ViewUtils;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
@@ -11,7 +12,6 @@ import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Hr;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -63,11 +63,11 @@ public class AccountView extends VerticalLayout {
 
         Button saveBtn = new Button("Change Password", e -> {
             if (next.getValue().isBlank()) {
-                notify("New password cannot be empty.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("New password cannot be empty.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             if (!next.getValue().equals(confirm.getValue())) {
-                notify("New passwords do not match.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("New passwords do not match.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             try {
@@ -75,9 +75,9 @@ public class AccountView extends VerticalLayout {
                         .getAuthentication().getName();
                 appUserService.changePassword(username, current.getValue(), next.getValue());
                 current.clear(); next.clear(); confirm.clear();
-                notify("Password changed successfully.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Password changed successfully.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -128,15 +128,15 @@ public class AccountView extends VerticalLayout {
         try {
             if (activate) {
                 appUserService.activate(selected.getId());
-                notify("User activated.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("User activated.", NotificationVariant.LUMO_SUCCESS);
             } else {
                 appUserService.deactivate(selected.getId());
-                notify("User deactivated.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("User deactivated.", NotificationVariant.LUMO_SUCCESS);
             }
             selected = null;
             refreshUserGrid();
         } catch (Exception ex) {
-            notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
         }
     }
 
@@ -155,20 +155,20 @@ public class AccountView extends VerticalLayout {
 
         Button save = new Button("Create", e -> {
             if (username.getValue().isBlank() || password.getValue().isBlank()) {
-                notify("Username and password are required.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Username and password are required.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             if (!password.getValue().equals(confirm.getValue())) {
-                notify("Passwords do not match.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Passwords do not match.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             try {
                 appUserService.create(username.getValue(), password.getValue());
                 dialog.close();
                 refreshUserGrid();
-                notify("User created.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("User created.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button cancel = new Button("Cancel", e -> dialog.close());
@@ -178,8 +178,4 @@ public class AccountView extends VerticalLayout {
         username.focus();
     }
 
-    private static void notify(String message, NotificationVariant variant) {
-        Notification n = Notification.show(message, 3000, Notification.Position.TOP_CENTER);
-        n.addThemeVariants(variant);
-    }
 }

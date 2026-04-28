@@ -11,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -92,13 +94,12 @@ public class RosterSolutionMapper {
         OffsetDateTime windowStart = period.getStartDate().atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime windowEnd   = period.getEndDate().plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
 
-        // ── Eligible staff ─────────────────────────────────────────────────────
+        // ── Eligible staff (active only, filtered in SQL) ──────────────────────
         List<StaffSiteAssignment> siteAssignments =
-                staffSiteAssignmentRepository.findBySite(period.getSite());
+                staffSiteAssignmentRepository.findBySiteAndStaffActiveTrue(period.getSite());
 
         List<Staff> eligibleStaff = siteAssignments.stream()
                 .map(StaffSiteAssignment::getStaff)
-                .filter(Staff::isActive)
                 .toList();
 
         log.debug("  eligible staff count={}", eligibleStaff.size());
@@ -195,16 +196,21 @@ public class RosterSolutionMapper {
      */
     @Transactional
     public void persistSolution(RosterSolution solution) {
-        // TECH DEBT: saveAll issues one SELECT-then-UPDATE (merge) per assignment row
-        // because the ShiftAssignment entities carry IDs loaded from the database.
-        // Hibernate treats them as detached and issues a SELECT before each merge.
-        // For large rosters this can be several hundred round-trips.
-        // Consider replacing with a single bulk JPQL UPDATE query per changed field,
-        // or clearing the entity IDs and using a DELETE + INSERT approach, once a
-        // performance budget is established.
-        List<ShiftAssignment> toSave = solution.getShiftAssignments();
-        shiftAssignmentRepository.saveAll(toSave);
-        log.debug("Persisted {} ShiftAssignment rows", toSave.size());
+        List<ShiftAssignment> solved = solution.getShiftAssignments();
+        if (solved.isEmpty()) {
+            return;
+        }
+        // Build a map of id → staff from the solver's (detached) output.
+        Map<Long, Staff> staffById = new HashMap<>(solved.size());
+        for (ShiftAssignment sa : solved) {
+            staffById.put(sa.getId(), sa.getStaff());
+        }
+        // Load managed entities in a single IN query, then set staff via dirty-check.
+        // This replaces saveAll(detached) which issued one SELECT+UPDATE per row.
+        List<Long> ids = solved.stream().map(ShiftAssignment::getId).toList();
+        List<ShiftAssignment> managed = shiftAssignmentRepository.findAllById(ids);
+        managed.forEach(sa -> sa.setStaff(staffById.get(sa.getId())));
+        log.debug("Persisted {} ShiftAssignment rows", managed.size());
     }
 
     // =========================================================================

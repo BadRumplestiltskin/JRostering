@@ -14,6 +14,7 @@ import com.magicsystems.jrostering.service.StaffService;
 import com.magicsystems.jrostering.service.StaffService.StaffCreateRequest;
 import com.magicsystems.jrostering.service.StaffService.StaffUpdateRequest;
 import com.magicsystems.jrostering.ui.MainLayout;
+import com.magicsystems.jrostering.ui.ViewUtils;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
@@ -24,7 +25,6 @@ import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -147,13 +147,13 @@ public class StaffView extends VerticalLayout {
         if (selectedStaff == null) return;
         try {
             staffService.deactivate(selectedStaff.getId());
-            notify("Staff member deactivated.", NotificationVariant.LUMO_SUCCESS);
+            ViewUtils.notify("Staff member deactivated.", NotificationVariant.LUMO_SUCCESS);
             selectedStaff = null;
             detailPanel.setVisible(false);
             detailPanel.removeAll();
             refreshStaffGrid();
         } catch (Exception ex) {
-            notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
         }
     }
 
@@ -211,9 +211,9 @@ public class StaffView extends VerticalLayout {
                 }
                 dialog.close();
                 refreshStaffGrid();
-                notify("Saved.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Saved.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button cancel = new Button("Cancel", e -> dialog.close());
@@ -272,9 +272,9 @@ public class StaffView extends VerticalLayout {
                 refreshQualGrid(grid, staff);
                 qualBox.clear();
                 awardedDate.clear();
-                notify("Qualification added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Qualification added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -286,9 +286,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.removeQualification(staff.getId(), sq.getQualification().getId());
                 refreshQualGrid(grid, staff);
-                notify("Qualification removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Qualification removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -331,9 +331,9 @@ public class StaffView extends VerticalLayout {
                 refreshSiteGrid(grid, staff);
                 siteBox.clear();
                 primary.setValue(false);
-                notify("Site assignment added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Site assignment added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -345,9 +345,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.removeSiteAssignment(staff.getId(), assignment.getSite().getId());
                 refreshSiteGrid(grid, staff);
-                notify("Site assignment removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Site assignment removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -386,9 +386,9 @@ public class StaffView extends VerticalLayout {
                 refreshIncompatibilitiesGrid(grid, staff);
                 otherStaff.clear();
                 reason.clear();
-                notify("Incompatibility added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Incompatibility added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -402,9 +402,9 @@ public class StaffView extends VerticalLayout {
                         ? selectedRow.getStaffB().getId() : selectedRow.getStaffA().getId();
                 staffService.removeIncompatibility(staff.getId(), otherId);
                 refreshIncompatibilitiesGrid(grid, staff);
-                notify("Incompatibility removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Incompatibility removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -448,9 +448,9 @@ public class StaffView extends VerticalLayout {
                 refreshPairingsGrid(grid, staff);
                 otherStaff.clear();
                 reason.clear();
-                notify("Pairing added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Pairing added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -464,9 +464,9 @@ public class StaffView extends VerticalLayout {
                         ? selectedRow.getStaffB().getId() : selectedRow.getStaffA().getId();
                 staffService.removePairing(staff.getId(), otherId);
                 refreshPairingsGrid(grid, staff);
-                notify("Pairing removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Pairing removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -508,9 +508,9 @@ public class StaffView extends VerticalLayout {
                         available.getValue());
                 grid.setItems(staffService.getAvailability(staff.getId()));
                 startField.clear(); endField.clear();
-                notify("Availability added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Availability added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -522,9 +522,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.removeAvailability(a.getId());
                 grid.setItems(staffService.getAvailability(staff.getId()));
-                notify("Availability removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Availability removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -560,9 +560,9 @@ public class StaffView extends VerticalLayout {
                 staffService.addPreference(staff.getId(), prefType.getValue(),
                         daySelect.getValue(), null);
                 grid.setItems(staffService.getPreferences(staff.getId()));
-                notify("Preference added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Preference added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -574,9 +574,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.removePreference(p.getId());
                 grid.setItems(staffService.getPreferences(staff.getId()));
-                notify("Preference removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Preference removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -611,9 +611,9 @@ public class StaffView extends VerticalLayout {
                         notes.getValue().isBlank() ? null : notes.getValue());
                 grid.setItems(staffService.getLeave(staff.getId()));
                 startDate.clear(); endDate.clear(); notes.clear();
-                notify("Leave requested.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Leave requested.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -637,9 +637,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.updateLeaveStatus(l.getId(), LeaveStatus.APPROVED);
                 grid.setItems(staffService.getLeave(staff.getId()));
-                notify("Leave approved.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Leave approved.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -647,9 +647,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.updateLeaveStatus(l.getId(), LeaveStatus.REJECTED);
                 grid.setItems(staffService.getLeave(staff.getId()));
-                notify("Leave rejected.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Leave rejected.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -657,9 +657,9 @@ public class StaffView extends VerticalLayout {
             try {
                 staffService.removeLeave(l.getId());
                 grid.setItems(staffService.getLeave(staff.getId()));
-                notify("Leave request cancelled.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Leave request cancelled.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -673,8 +673,4 @@ public class StaffView extends VerticalLayout {
     // Helpers
     // =========================================================================
 
-    private static void notify(String message, NotificationVariant variant) {
-        Notification n = Notification.show(message, 3000, Notification.Position.TOP_CENTER);
-        n.addThemeVariants(variant);
-    }
 }

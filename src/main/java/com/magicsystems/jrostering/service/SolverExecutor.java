@@ -7,6 +7,9 @@ import ai.timefold.solver.core.api.solver.SolverFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.magicsystems.jrostering.solver.RosterSolution;
 import com.magicsystems.jrostering.solver.RosterSolutionMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -52,6 +55,7 @@ public class SolverExecutor {
     private final RosterSolutionMapper                              solutionMapper;
     private final SolverTransactionHelper                           txHelper;
     private final ObjectMapper                                      objectMapper;
+    private final MeterRegistry                                     meterRegistry;
 
     /**
      * Active {@link Solver} instances keyed by roster period ID.
@@ -79,6 +83,11 @@ public class SolverExecutor {
                 t.setDaemon(true);
                 return t;
             });
+
+    @PostConstruct
+    void registerMetrics() {
+        meterRegistry.gauge("jrostering.solver.active", activeSolvers, ConcurrentHashMap::size);
+    }
 
     // =========================================================================
     // Public interface
@@ -175,6 +184,7 @@ public class SolverExecutor {
         );
 
         RosterSolution result = null;
+        Timer.Sample timerSample = Timer.start(meterRegistry);
 
         try {
             // Step 2 — load problem in a fresh read-only transaction
@@ -188,6 +198,7 @@ public class SolverExecutor {
             timeLimitFuture.cancel(false);
             activeSolvers.remove(rosterPeriodId);
             cancelRequested.remove(rosterPeriodId);
+            timerSample.stop(meterRegistry.timer("jrostering.solver.solve", "outcome", "failed"));
             txHelper.persistFailed(solverJobId, rosterPeriodId, e);
             return;
 
@@ -201,8 +212,13 @@ public class SolverExecutor {
         String violationJson = buildViolationJson(result);
 
         if (wasCancelled) {
+            timerSample.stop(meterRegistry.timer("jrostering.solver.solve", "outcome", "cancelled"));
             txHelper.persistCancelled(solverJobId, rosterPeriodId, result, violationJson);
         } else {
+            HardMediumSoftScore score = result.getScore();
+            boolean feasible = score.hardScore() == 0 && score.mediumScore() == 0;
+            timerSample.stop(meterRegistry.timer("jrostering.solver.solve",
+                    "outcome", feasible ? "completed" : "infeasible"));
             persistFinalResult(solverJobId, rosterPeriodId, result, violationJson);
         }
     }

@@ -9,6 +9,7 @@ import com.magicsystems.jrostering.service.RosterService.ShiftUpdateRequest;
 import com.magicsystems.jrostering.service.SiteService;
 import com.magicsystems.jrostering.service.SolverService;
 import com.magicsystems.jrostering.ui.MainLayout;
+import com.magicsystems.jrostering.ui.ViewUtils;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
@@ -20,7 +21,6 @@ import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -157,9 +157,9 @@ public class RosterView extends VerticalLayout {
                 rosterService.createRosterPeriod(site.getId(), startDatePicker.getValue(), null);
                 startDatePicker.clear();
                 refreshPeriodGrid();
-                notify("Period created.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Period created.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -183,9 +183,9 @@ public class RosterView extends VerticalLayout {
                 case "cancel"  -> rosterService.cancel(selectedPeriod.getId());
             }
             refreshPeriodGrid();
-            notify("Done.", NotificationVariant.LUMO_SUCCESS);
+            ViewUtils.notify("Done.", NotificationVariant.LUMO_SUCCESS);
         } catch (Exception ex) {
-            notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
         }
     }
 
@@ -243,9 +243,9 @@ public class RosterView extends VerticalLayout {
             rosterService.removeShift(shift.getId());
             selectedShift = null;
             refreshShiftGrid();
-            notify("Shift removed.", NotificationVariant.LUMO_SUCCESS);
+            ViewUtils.notify("Shift removed.", NotificationVariant.LUMO_SUCCESS);
         } catch (Exception ex) {
-            notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
         }
     }
 
@@ -299,9 +299,9 @@ public class RosterView extends VerticalLayout {
                 }
                 dialog.close();
                 refreshShiftGrid();
-                notify("Shift saved.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Shift saved.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button cancel = new Button("Cancel", e -> dialog.close());
@@ -341,7 +341,7 @@ public class RosterView extends VerticalLayout {
 
         Button addBtn = new Button("Add", e -> {
             if (qualBox.getValue() == null) {
-                notify("Select a qualification first.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Select a qualification first.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             try {
@@ -350,9 +350,9 @@ public class RosterView extends VerticalLayout {
                 refreshReqGrid(reqGrid, shift);
                 qualBox.clear();
                 minCount.setValue(1);
-                notify("Requirement added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Requirement added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         addBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -366,9 +366,9 @@ public class RosterView extends VerticalLayout {
                     try {
                         rosterService.removeQualificationRequirement(req.getId());
                         refreshReqGrid(reqGrid, shift);
-                        notify("Requirement removed.", NotificationVariant.LUMO_SUCCESS);
+                        ViewUtils.notify("Requirement removed.", NotificationVariant.LUMO_SUCCESS);
                     } catch (Exception ex) {
-                        notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                        ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
                     }
                 }));
 
@@ -400,9 +400,9 @@ public class RosterView extends VerticalLayout {
                         selectedPeriod.getId(), timeLimitField.getValue());
                 lastJobId = job.getId();
                 solverStatus.setText("Job #" + job.getId() + " submitted — Status: " + job.getStatus());
-                notify("Solve job submitted.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Solve job submitted.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         submitBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -410,10 +410,10 @@ public class RosterView extends VerticalLayout {
         Button cancelBtn  = new Button("Cancel Solve",    e -> {
             try {
                 solverService.cancelSolve(selectedPeriod.getId());
-                notify("Cancel requested.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Cancel requested.", NotificationVariant.LUMO_SUCCESS);
                 refreshSolverStatus();
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button refreshBtn = new Button("Refresh Status",  e -> {
@@ -479,9 +479,9 @@ public class RosterView extends VerticalLayout {
             try {
                 rosterService.pin(selectedAssignment.getId());
                 refreshAssignments();
-                notify("Assignment pinned.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Assignment pinned.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -489,9 +489,9 @@ public class RosterView extends VerticalLayout {
             try {
                 rosterService.unpin(selectedAssignment.getId());
                 refreshAssignments();
-                notify("Assignment unpinned.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Assignment unpinned.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -507,8 +507,4 @@ public class RosterView extends VerticalLayout {
     // Helpers
     // =========================================================================
 
-    private static void notify(String message, NotificationVariant variant) {
-        Notification n = Notification.show(message, 3000, Notification.Position.TOP_CENTER);
-        n.addThemeVariants(variant);
-    }
 }

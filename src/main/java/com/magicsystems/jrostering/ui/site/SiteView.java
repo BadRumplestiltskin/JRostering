@@ -7,6 +7,7 @@ import com.magicsystems.jrostering.service.SiteService.RuleConfigurationUpdateRe
 import com.magicsystems.jrostering.service.SiteService.SiteCreateRequest;
 import com.magicsystems.jrostering.service.SiteService.SiteUpdateRequest;
 import com.magicsystems.jrostering.ui.MainLayout;
+import com.magicsystems.jrostering.ui.ViewUtils;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
@@ -15,7 +16,6 @@ import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -112,13 +112,13 @@ public class SiteView extends VerticalLayout {
         if (selectedSite == null) return;
         try {
             siteService.deactivate(selectedSite.getId());
-            notify("Site deactivated.", NotificationVariant.LUMO_SUCCESS);
+            ViewUtils.notify("Site deactivated.", NotificationVariant.LUMO_SUCCESS);
             selectedSite = null;
             detailPanel.setVisible(false);
             detailPanel.removeAll();
             refreshSiteGrid();
         } catch (Exception ex) {
-            notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
         }
     }
 
@@ -153,9 +153,9 @@ public class SiteView extends VerticalLayout {
                 }
                 dialog.close();
                 refreshSiteGrid();
-                notify("Saved.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Saved.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button cancel = new Button("Cancel", e -> dialog.close());
@@ -199,9 +199,9 @@ public class SiteView extends VerticalLayout {
                 siteService.addShiftType(site.getId(), nameField.getValue());
                 grid.setItems(siteService.getShiftTypes(site.getId()));
                 nameField.clear();
-                notify("Shift type added.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Shift type added.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
 
@@ -229,9 +229,9 @@ public class SiteView extends VerticalLayout {
                     siteService.updateShiftType(st.getId(), nameField2.getValue());
                     grid.setItems(siteService.getShiftTypes(site.getId()));
                     dialog.close();
-                    notify("Shift type updated.", NotificationVariant.LUMO_SUCCESS);
+                    ViewUtils.notify("Shift type updated.", NotificationVariant.LUMO_SUCCESS);
                 } catch (Exception ex) {
-                    notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                    ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
                 }
             });
             Button cancel = new Button("Cancel", ev -> dialog.close());
@@ -244,9 +244,9 @@ public class SiteView extends VerticalLayout {
             try {
                 siteService.removeShiftType(st.getId());
                 grid.setItems(siteService.getShiftTypes(site.getId()));
-                notify("Shift type removed.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Shift type removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         }));
 
@@ -306,9 +306,9 @@ public class SiteView extends VerticalLayout {
                                 weight.getValue(), params.getValue()));
                 grid.setItems(siteService.getRuleConfigurations(site.getId()));
                 dialog.close();
-                notify("Rule updated.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Rule updated.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button cancel = new Button("Cancel", e -> dialog.close());
@@ -321,8 +321,4 @@ public class SiteView extends VerticalLayout {
     // Helpers
     // =========================================================================
 
-    private static void notify(String message, NotificationVariant variant) {
-        Notification n = Notification.show(message, 3000, Notification.Position.TOP_CENTER);
-        n.addThemeVariants(variant);
-    }
 }

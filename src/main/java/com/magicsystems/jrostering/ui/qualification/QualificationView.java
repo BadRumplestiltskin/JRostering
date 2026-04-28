@@ -3,13 +3,13 @@ package com.magicsystems.jrostering.ui.qualification;
 import com.magicsystems.jrostering.domain.Qualification;
 import com.magicsystems.jrostering.service.QualificationService;
 import com.magicsystems.jrostering.ui.MainLayout;
+import com.magicsystems.jrostering.ui.ViewUtils;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -109,7 +109,7 @@ public class QualificationView extends VerticalLayout {
 
         Button save = new Button("Save", e -> {
             if (nameField.getValue().isBlank()) {
-                notify("Name is required.", NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Name is required.", NotificationVariant.LUMO_ERROR);
                 return;
             }
             try {
@@ -120,9 +120,9 @@ public class QualificationView extends VerticalLayout {
                 }
                 dialog.close();
                 refresh();
-                notify("Saved.", NotificationVariant.LUMO_SUCCESS);
+                ViewUtils.notify("Saved.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
-                notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+                ViewUtils.notify("Error: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
             }
         });
         Button cancel = new Button("Cancel", e -> dialog.close());
@@ -138,14 +138,10 @@ public class QualificationView extends VerticalLayout {
             qualificationService.delete(selected.getId());
             selected = null;
             refresh();
-            notify("Qualification deleted.", NotificationVariant.LUMO_SUCCESS);
+            ViewUtils.notify("Qualification deleted.", NotificationVariant.LUMO_SUCCESS);
         } catch (Exception ex) {
-            notify("Cannot delete: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
+            ViewUtils.notify("Cannot delete: " + ex.getMessage(), NotificationVariant.LUMO_ERROR);
         }
     }
 
-    private static void notify(String message, NotificationVariant variant) {
-        Notification n = Notification.show(message, 3000, Notification.Position.TOP_CENTER);
-        n.addThemeVariants(variant);
-    }
 }

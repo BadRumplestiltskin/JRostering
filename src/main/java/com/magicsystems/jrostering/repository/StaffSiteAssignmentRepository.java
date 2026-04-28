@@ -19,6 +19,18 @@ public interface StaffSiteAssignmentRepository extends JpaRepository<StaffSiteAs
      */
     List<StaffSiteAssignment> findBySite(Site site);
 
+    /**
+     * Returns associations for the given site where the staff member is active.
+     * Preferred over {@link #findBySite} in solver build paths to avoid loading
+     * inactive staff into the solution.
+     */
+    List<StaffSiteAssignment> findBySiteAndStaffActiveTrue(Site site);
+
+    /**
+     * Returns associations for the given staff member where the site is active.
+     */
+    List<StaffSiteAssignment> findByStaffAndSiteActiveTrue(Staff staff);
+
     Optional<StaffSiteAssignment> findByStaffAndSite(Staff staff, Site site);
 
     boolean existsByStaffAndSite(Staff staff, Site site);
