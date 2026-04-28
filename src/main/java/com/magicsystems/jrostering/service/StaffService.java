@@ -14,9 +14,13 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * Service responsible for managing {@link Staff} and all directly associated
- * data: qualifications, site assignments, incompatibilities, pairings,
- * availability windows, preferences, and leave.
+ * Service responsible for managing core {@link Staff} data: CRUD, availability
+ * windows, scheduling preferences, and leave.
+ *
+ * <p>Qualification, site-assignment, and relationship (incompatibility/pairing)
+ * operations have been extracted to {@link StaffQualificationService},
+ * {@link StaffAssignmentService}, and {@link StaffRelationshipService} respectively
+ * to keep constructor injection size manageable.</p>
  *
  * <h3>Lifecycle</h3>
  * <p>Staff are never hard-deleted. Deactivation ({@link #deactivate}) sets
@@ -72,45 +76,27 @@ public class StaffService {
     // Dependencies
     // =========================================================================
 
-    private final OrganisationRepository       organisationRepository;
-    private final StaffRepository              staffRepository;
-    private final QualificationRepository      qualificationRepository;
-    private final ShiftTypeRepository          shiftTypeRepository;
-    private final StaffQualificationRepository staffQualificationRepository;
-    private final StaffSiteAssignmentRepository staffSiteAssignmentRepository;
-    private final SiteRepository               siteRepository;
-    private final StaffIncompatibilityRepository staffIncompatibilityRepository;
-    private final StaffPairingRepository       staffPairingRepository;
-    private final StaffAvailabilityRepository  staffAvailabilityRepository;
-    private final StaffPreferenceRepository    staffPreferenceRepository;
-    private final LeaveRepository              leaveRepository;
+    private final OrganisationRepository      organisationRepository;
+    private final StaffRepository             staffRepository;
+    private final ShiftTypeRepository         shiftTypeRepository;
+    private final StaffAvailabilityRepository staffAvailabilityRepository;
+    private final StaffPreferenceRepository   staffPreferenceRepository;
+    private final LeaveRepository             leaveRepository;
 
     public StaffService(
             OrganisationRepository organisationRepository,
             StaffRepository staffRepository,
-            QualificationRepository qualificationRepository,
             ShiftTypeRepository shiftTypeRepository,
-            StaffQualificationRepository staffQualificationRepository,
-            StaffSiteAssignmentRepository staffSiteAssignmentRepository,
-            SiteRepository siteRepository,
-            StaffIncompatibilityRepository staffIncompatibilityRepository,
-            StaffPairingRepository staffPairingRepository,
             StaffAvailabilityRepository staffAvailabilityRepository,
             StaffPreferenceRepository staffPreferenceRepository,
             LeaveRepository leaveRepository
     ) {
-        this.organisationRepository        = organisationRepository;
-        this.staffRepository               = staffRepository;
-        this.qualificationRepository       = qualificationRepository;
-        this.shiftTypeRepository           = shiftTypeRepository;
-        this.staffQualificationRepository  = staffQualificationRepository;
-        this.staffSiteAssignmentRepository = staffSiteAssignmentRepository;
-        this.siteRepository                = siteRepository;
-        this.staffIncompatibilityRepository = staffIncompatibilityRepository;
-        this.staffPairingRepository        = staffPairingRepository;
-        this.staffAvailabilityRepository   = staffAvailabilityRepository;
-        this.staffPreferenceRepository     = staffPreferenceRepository;
-        this.leaveRepository               = leaveRepository;
+        this.organisationRepository    = organisationRepository;
+        this.staffRepository           = staffRepository;
+        this.shiftTypeRepository       = shiftTypeRepository;
+        this.staffAvailabilityRepository = staffAvailabilityRepository;
+        this.staffPreferenceRepository = staffPreferenceRepository;
+        this.leaveRepository           = leaveRepository;
     }
 
     // =========================================================================
@@ -208,199 +194,6 @@ public class StaffService {
         staff.setActive(false);
         log.info("Deactivated staff id={}", staffId);
         return staffRepository.save(staff);
-    }
-
-    // =========================================================================
-    // Qualification management
-    // =========================================================================
-
-    /**
-     * Records that a staff member holds a given qualification.
-     *
-     * @throws EntityNotFoundException   if the staff member or qualification does not exist
-     * @throws InvalidOperationException if the staff member already holds this qualification
-     */
-    @Transactional
-    public StaffQualification addQualification(Long staffId, Long qualificationId, LocalDate awardedDate) {
-        Staff staff             = requireStaff(staffId);
-        Qualification qual      = requireQualification(qualificationId);
-
-        if (staffQualificationRepository.existsByStaffAndQualification(staff, qual)) {
-            throw new InvalidOperationException(
-                    "Staff id=" + staffId + " already holds qualification id=" + qualificationId);
-        }
-
-        StaffQualification sq = new StaffQualification();
-        sq.setStaff(staff);
-        sq.setQualification(qual);
-        sq.setAwardedDate(awardedDate);
-        return staffQualificationRepository.save(sq);
-    }
-
-    /**
-     * Removes a qualification record from a staff member.
-     *
-     * @throws EntityNotFoundException if the staff member does not hold this qualification
-     */
-    @Transactional
-    public void removeQualification(Long staffId, Long qualificationId) {
-        Staff staff        = requireStaff(staffId);
-        Qualification qual = requireQualification(qualificationId);
-
-        StaffQualification sq = staffQualificationRepository
-                .findByStaffAndQualification(staff, qual)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Staff id=" + staffId + " does not hold qualification id=" + qualificationId));
-
-        staffQualificationRepository.delete(sq);
-    }
-
-    // =========================================================================
-    // Site assignment management
-    // =========================================================================
-
-    /**
-     * Assigns a staff member to a site.
-     *
-     * @throws EntityNotFoundException   if the staff member or site does not exist
-     * @throws InvalidOperationException if the staff member is already assigned to this site
-     */
-    @Transactional
-    public StaffSiteAssignment addSiteAssignment(Long staffId, Long siteId, boolean primarySite) {
-        Staff staff = requireStaff(staffId);
-        Site site   = requireSite(siteId);
-
-        if (staffSiteAssignmentRepository.existsByStaffAndSite(staff, site)) {
-            throw new InvalidOperationException(
-                    "Staff id=" + staffId + " is already assigned to site id=" + siteId);
-        }
-
-        StaffSiteAssignment assignment = new StaffSiteAssignment();
-        assignment.setStaff(staff);
-        assignment.setSite(site);
-        assignment.setPrimarySite(primarySite);
-        return staffSiteAssignmentRepository.save(assignment);
-    }
-
-    /**
-     * Removes a staff member's assignment to a site.
-     *
-     * @throws EntityNotFoundException if the assignment does not exist
-     */
-    @Transactional
-    public void removeSiteAssignment(Long staffId, Long siteId) {
-        Staff staff = requireStaff(staffId);
-        Site site   = requireSite(siteId);
-
-        StaffSiteAssignment assignment = staffSiteAssignmentRepository
-                .findByStaffAndSite(staff, site)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "No site assignment found for staff id=" + staffId + " and site id=" + siteId));
-
-        staffSiteAssignmentRepository.delete(assignment);
-    }
-
-    // =========================================================================
-    // Incompatibility management
-    // =========================================================================
-
-    /**
-     * Records that two staff members must never share a shift.
-     *
-     * <p>Canonical ordering ({@code staffA.id < staffB.id}) is enforced internally;
-     * the caller may supply the IDs in either order.</p>
-     *
-     * @throws EntityNotFoundException   if either staff member does not exist
-     * @throws InvalidOperationException if the pair are already recorded as incompatible,
-     *                                   or if both IDs are the same
-     */
-    @Transactional
-    public StaffIncompatibility addIncompatibility(Long staffIdOne, Long staffIdTwo, String reason) {
-        requireDistinctStaff(staffIdOne, staffIdTwo);
-        Staff lower  = requireStaff(Math.min(staffIdOne, staffIdTwo));
-        Staff higher = requireStaff(Math.max(staffIdOne, staffIdTwo));
-
-        if (staffIncompatibilityRepository.existsByStaffAAndStaffB(lower, higher)) {
-            throw new InvalidOperationException(
-                    "Staff id=" + lower.getId() + " and id=" + higher.getId()
-                    + " are already recorded as incompatible.");
-        }
-
-        StaffIncompatibility incompatibility = new StaffIncompatibility();
-        incompatibility.setStaffA(lower);
-        incompatibility.setStaffB(higher);
-        incompatibility.setReason(reason);
-        return staffIncompatibilityRepository.save(incompatibility);
-    }
-
-    /**
-     * Removes an incompatibility record between two staff members.
-     *
-     * @throws EntityNotFoundException if no incompatibility record exists for this pair
-     */
-    @Transactional
-    public void removeIncompatibility(Long staffIdOne, Long staffIdTwo) {
-        Staff lower  = requireStaff(Math.min(staffIdOne, staffIdTwo));
-        Staff higher = requireStaff(Math.max(staffIdOne, staffIdTwo));
-
-        StaffIncompatibility record = staffIncompatibilityRepository
-                .findByStaffAAndStaffB(lower, higher)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "No incompatibility record found for staff id=" + lower.getId()
-                        + " and id=" + higher.getId()));
-
-        staffIncompatibilityRepository.delete(record);
-    }
-
-    // =========================================================================
-    // Pairing management
-    // =========================================================================
-
-    /**
-     * Records that two staff members must always share a shift.
-     *
-     * <p>Canonical ordering ({@code staffA.id < staffB.id}) is enforced internally.</p>
-     *
-     * @throws EntityNotFoundException   if either staff member does not exist
-     * @throws InvalidOperationException if the pair are already recorded as paired,
-     *                                   or if both IDs are the same
-     */
-    @Transactional
-    public StaffPairing addPairing(Long staffIdOne, Long staffIdTwo, String reason) {
-        requireDistinctStaff(staffIdOne, staffIdTwo);
-        Staff lower  = requireStaff(Math.min(staffIdOne, staffIdTwo));
-        Staff higher = requireStaff(Math.max(staffIdOne, staffIdTwo));
-
-        if (staffPairingRepository.existsByStaffAAndStaffB(lower, higher)) {
-            throw new InvalidOperationException(
-                    "Staff id=" + lower.getId() + " and id=" + higher.getId()
-                    + " are already recorded as a required pair.");
-        }
-
-        StaffPairing pairing = new StaffPairing();
-        pairing.setStaffA(lower);
-        pairing.setStaffB(higher);
-        pairing.setReason(reason);
-        return staffPairingRepository.save(pairing);
-    }
-
-    /**
-     * Removes a pairing record between two staff members.
-     *
-     * @throws EntityNotFoundException if no pairing record exists for this pair
-     */
-    @Transactional
-    public void removePairing(Long staffIdOne, Long staffIdTwo) {
-        Staff lower  = requireStaff(Math.min(staffIdOne, staffIdTwo));
-        Staff higher = requireStaff(Math.max(staffIdOne, staffIdTwo));
-
-        StaffPairing pairing = staffPairingRepository
-                .findByStaffAAndStaffB(lower, higher)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "No pairing record found for staff id=" + lower.getId()
-                        + " and id=" + higher.getId()));
-
-        staffPairingRepository.delete(pairing);
     }
 
     // =========================================================================
@@ -665,23 +458,6 @@ public class StaffService {
     private Staff requireStaff(Long id) {
         return staffRepository.findById(id)
                 .orElseThrow(() -> EntityNotFoundException.of("Staff", id));
-    }
-
-    private Qualification requireQualification(Long id) {
-        return qualificationRepository.findById(id)
-                .orElseThrow(() -> EntityNotFoundException.of("Qualification", id));
-    }
-
-    private Site requireSite(Long id) {
-        return siteRepository.findById(id)
-                .orElseThrow(() -> EntityNotFoundException.of("Site", id));
-    }
-
-    private void requireDistinctStaff(Long idOne, Long idTwo) {
-        if (idOne.equals(idTwo)) {
-            throw new InvalidOperationException(
-                    "A staff member cannot have an incompatibility or pairing with themselves.");
-        }
     }
 
     private void applyStaffFields(Staff staff, String firstName, String lastName,

@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.magicsystems.jrostering.domain.*;
 import com.magicsystems.jrostering.service.EntityNotFoundException;
 import com.magicsystems.jrostering.service.InvalidOperationException;
+import com.magicsystems.jrostering.service.StaffAssignmentService;
+import com.magicsystems.jrostering.service.StaffQualificationService;
+import com.magicsystems.jrostering.service.StaffRelationshipService;
 import com.magicsystems.jrostering.service.StaffService;
 import com.magicsystems.jrostering.service.StaffService.StaffCreateRequest;
 import org.junit.jupiter.api.Test;
@@ -31,7 +34,10 @@ class StaffControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean  StaffService staffService;
+    @MockBean  StaffService             staffService;
+    @MockBean  StaffQualificationService qualificationService;
+    @MockBean  StaffAssignmentService   assignmentService;
+    @MockBean  StaffRelationshipService  relationshipService;
 
     // =========================================================================
     // Staff CRUD
@@ -114,7 +120,7 @@ class StaffControllerTest {
     void addQualification_returns200() throws Exception {
         StaffQualification sq = new StaffQualification();
         sq.setId(10L);
-        when(staffService.addQualification(1L, 7L, null)).thenReturn(sq);
+        when(qualificationService.addQualification(1L, 7L, null)).thenReturn(sq);
 
         mockMvc.perform(post("/api/staff/1/qualifications/7"))
                 .andExpect(status().isOk());
@@ -122,7 +128,7 @@ class StaffControllerTest {
 
     @Test
     void removeQualification_returns204() throws Exception {
-        doNothing().when(staffService).removeQualification(1L, 7L);
+        doNothing().when(qualificationService).removeQualification(1L, 7L);
 
         mockMvc.perform(delete("/api/staff/1/qualifications/7"))
                 .andExpect(status().isNoContent());
@@ -189,7 +195,7 @@ class StaffControllerTest {
     void addIncompatibility_returns200() throws Exception {
         StaffIncompatibility inc = new StaffIncompatibility();
         inc.setId(50L);
-        when(staffService.addIncompatibility(1L, 2L, null)).thenReturn(inc);
+        when(relationshipService.addIncompatibility(1L, 2L, null)).thenReturn(inc);
 
         mockMvc.perform(post("/api/staff/1/incompatibilities/2"))
                 .andExpect(status().isOk());
@@ -197,7 +203,7 @@ class StaffControllerTest {
 
     @Test
     void removeIncompatibility_returns204() throws Exception {
-        doNothing().when(staffService).removeIncompatibility(1L, 2L);
+        doNothing().when(relationshipService).removeIncompatibility(1L, 2L);
 
         mockMvc.perform(delete("/api/staff/1/incompatibilities/2"))
                 .andExpect(status().isNoContent());

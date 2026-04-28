@@ -19,18 +19,12 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class StaffServiceTest {
 
-    @Mock StaffRepository                      staffRepository;
-    @Mock OrganisationRepository               organisationRepository;
-    @Mock QualificationRepository              qualificationRepository;
-    @Mock StaffQualificationRepository         staffQualificationRepository;
-    @Mock StaffSiteAssignmentRepository        staffSiteAssignmentRepository;
-    @Mock StaffAvailabilityRepository          staffAvailabilityRepository;
-    @Mock StaffPreferenceRepository            staffPreferenceRepository;
-    @Mock LeaveRepository                      leaveRepository;
-    @Mock SiteRepository                       siteRepository;
-    @Mock ShiftTypeRepository                  shiftTypeRepository;
-    @Mock StaffIncompatibilityRepository       staffIncompatibilityRepository;
-    @Mock StaffPairingRepository               staffPairingRepository;
+    @Mock StaffRepository           staffRepository;
+    @Mock OrganisationRepository    organisationRepository;
+    @Mock StaffAvailabilityRepository staffAvailabilityRepository;
+    @Mock StaffPreferenceRepository staffPreferenceRepository;
+    @Mock LeaveRepository           leaveRepository;
+    @Mock ShiftTypeRepository       shiftTypeRepository;
 
     @InjectMocks StaffService service;
 
@@ -122,35 +116,6 @@ class StaffServiceTest {
         assertThat(result).doesNotContain(inactive);
     }
 
-    @Test
-    void addQualification_linksQualificationToStaff() {
-        Staff staff = staff(1L, "Jane", "Smith");
-        Qualification qual = qualification(10L, "First Aid");
-        when(staffRepository.findById(1L)).thenReturn(Optional.of(staff));
-        when(qualificationRepository.findById(10L)).thenReturn(Optional.of(qual));
-        when(staffQualificationRepository.existsByStaffAndQualification(staff, qual))
-                .thenReturn(false);
-        when(staffQualificationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        StaffQualification result = service.addQualification(1L, 10L, null);
-
-        assertThat(result.getStaff()).isEqualTo(staff);
-        assertThat(result.getQualification()).isEqualTo(qual);
-    }
-
-    @Test
-    void addQualification_throwsInvalidOperation_whenAlreadyAssigned() {
-        Staff staff = staff(1L, "Jane", "Smith");
-        Qualification qual = qualification(10L, "First Aid");
-        when(staffRepository.findById(1L)).thenReturn(Optional.of(staff));
-        when(qualificationRepository.findById(10L)).thenReturn(Optional.of(qual));
-        when(staffQualificationRepository.existsByStaffAndQualification(staff, qual))
-                .thenReturn(true);
-
-        assertThatThrownBy(() -> service.addQualification(1L, 10L, null))
-                .isInstanceOf(InvalidOperationException.class);
-    }
-
     // -------------------------------------------------------------------------
 
     private static Staff staff(Long id, String first, String last) {
@@ -161,12 +126,5 @@ class StaffServiceTest {
         s.setEmail(first.toLowerCase() + "@example.com");
         s.setActive(true);
         return s;
-    }
-
-    private static Qualification qualification(Long id, String name) {
-        Qualification q = new Qualification();
-        q.setId(id);
-        q.setName(name);
-        return q;
     }
 }

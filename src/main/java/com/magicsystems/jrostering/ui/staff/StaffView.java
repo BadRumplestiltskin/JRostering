@@ -10,6 +10,9 @@ import com.magicsystems.jrostering.repository.StaffQualificationRepository;
 import com.magicsystems.jrostering.repository.StaffSiteAssignmentRepository;
 import com.magicsystems.jrostering.domain.StaffIncompatibility;
 import com.magicsystems.jrostering.domain.StaffPairing;
+import com.magicsystems.jrostering.service.StaffAssignmentService;
+import com.magicsystems.jrostering.service.StaffQualificationService;
+import com.magicsystems.jrostering.service.StaffRelationshipService;
 import com.magicsystems.jrostering.service.StaffService;
 import com.magicsystems.jrostering.service.StaffService.StaffCreateRequest;
 import com.magicsystems.jrostering.service.StaffService.StaffUpdateRequest;
@@ -53,22 +56,28 @@ import java.util.Optional;
 @SuppressWarnings("serial")
 public class StaffView extends VerticalLayout {
 
-    private final StaffService                  staffService;
-    private final OrganisationRepository         organisationRepository;
-    private final QualificationRepository        qualificationRepository;
-    private final SiteRepository                 siteRepository;
-    private final StaffQualificationRepository        staffQualificationRepository;
-    private final StaffSiteAssignmentRepository       staffSiteAssignmentRepository;
-    private final StaffIncompatibilityRepository      staffIncompatibilityRepository;
-    private final StaffPairingRepository              staffPairingRepository;
+    private final StaffService              staffService;
+    private final StaffQualificationService qualificationService;
+    private final StaffAssignmentService    assignmentService;
+    private final StaffRelationshipService  relationshipService;
+    private final OrganisationRepository    organisationRepository;
+    private final QualificationRepository   qualificationRepository;
+    private final SiteRepository            siteRepository;
+    private final StaffQualificationRepository   staffQualificationRepository;
+    private final StaffSiteAssignmentRepository  staffSiteAssignmentRepository;
+    private final StaffIncompatibilityRepository staffIncompatibilityRepository;
+    private final StaffPairingRepository         staffPairingRepository;
 
-    private final Grid<Staff>   staffGrid  = new Grid<>(Staff.class, false);
+    private final Grid<Staff>    staffGrid   = new Grid<>(Staff.class, false);
     private final VerticalLayout detailPanel = new VerticalLayout();
 
-    private Long   orgId;
-    private Staff  selectedStaff;
+    private Long  orgId;
+    private Staff selectedStaff;
 
     public StaffView(StaffService staffService,
+                     StaffQualificationService qualificationService,
+                     StaffAssignmentService assignmentService,
+                     StaffRelationshipService relationshipService,
                      OrganisationRepository organisationRepository,
                      QualificationRepository qualificationRepository,
                      SiteRepository siteRepository,
@@ -76,12 +85,15 @@ public class StaffView extends VerticalLayout {
                      StaffSiteAssignmentRepository staffSiteAssignmentRepository,
                      StaffIncompatibilityRepository staffIncompatibilityRepository,
                      StaffPairingRepository staffPairingRepository) {
-        this.staffService                  = staffService;
-        this.organisationRepository        = organisationRepository;
-        this.qualificationRepository       = qualificationRepository;
-        this.siteRepository                = siteRepository;
-        this.staffQualificationRepository  = staffQualificationRepository;
-        this.staffSiteAssignmentRepository = staffSiteAssignmentRepository;
+        this.staffService               = staffService;
+        this.qualificationService       = qualificationService;
+        this.assignmentService          = assignmentService;
+        this.relationshipService        = relationshipService;
+        this.organisationRepository     = organisationRepository;
+        this.qualificationRepository    = qualificationRepository;
+        this.siteRepository             = siteRepository;
+        this.staffQualificationRepository   = staffQualificationRepository;
+        this.staffSiteAssignmentRepository  = staffSiteAssignmentRepository;
         this.staffIncompatibilityRepository = staffIncompatibilityRepository;
         this.staffPairingRepository         = staffPairingRepository;
 
@@ -267,7 +279,7 @@ public class StaffView extends VerticalLayout {
         Button addBtn = new Button("Add", e -> {
             if (qualBox.getValue() == null) return;
             try {
-                staffService.addQualification(staff.getId(), qualBox.getValue().getId(),
+                qualificationService.addQualification(staff.getId(), qualBox.getValue().getId(),
                         awardedDate.getValue());
                 refreshQualGrid(grid, staff);
                 qualBox.clear();
@@ -284,7 +296,7 @@ public class StaffView extends VerticalLayout {
         grid.addSelectionListener(ev -> removeBtn.setEnabled(ev.getFirstSelectedItem().isPresent()));
         removeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(sq -> {
             try {
-                staffService.removeQualification(staff.getId(), sq.getQualification().getId());
+                qualificationService.removeQualification(staff.getId(), sq.getQualification().getId());
                 refreshQualGrid(grid, staff);
                 ViewUtils.notify("Qualification removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
@@ -326,7 +338,7 @@ public class StaffView extends VerticalLayout {
         Button addBtn = new Button("Add", e -> {
             if (siteBox.getValue() == null) return;
             try {
-                staffService.addSiteAssignment(staff.getId(), siteBox.getValue().getId(),
+                assignmentService.addSiteAssignment(staff.getId(), siteBox.getValue().getId(),
                         primary.getValue());
                 refreshSiteGrid(grid, staff);
                 siteBox.clear();
@@ -343,7 +355,7 @@ public class StaffView extends VerticalLayout {
         grid.addSelectionListener(ev -> removeBtn.setEnabled(ev.getFirstSelectedItem().isPresent()));
         removeBtn.addClickListener(e -> grid.getSelectedItems().stream().findFirst().ifPresent(assignment -> {
             try {
-                staffService.removeSiteAssignment(staff.getId(), assignment.getSite().getId());
+                assignmentService.removeSiteAssignment(staff.getId(), assignment.getSite().getId());
                 refreshSiteGrid(grid, staff);
                 ViewUtils.notify("Site assignment removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
@@ -381,7 +393,7 @@ public class StaffView extends VerticalLayout {
         Button addBtn = new Button("Add", e -> {
             if (otherStaff.getValue() == null) return;
             try {
-                staffService.addIncompatibility(staff.getId(), otherStaff.getValue().getId(),
+                relationshipService.addIncompatibility(staff.getId(), otherStaff.getValue().getId(),
                         reason.getValue().isBlank() ? null : reason.getValue());
                 refreshIncompatibilitiesGrid(grid, staff);
                 otherStaff.clear();
@@ -400,7 +412,7 @@ public class StaffView extends VerticalLayout {
             try {
                 Long otherId = selectedRow.getStaffA().getId().equals(staff.getId())
                         ? selectedRow.getStaffB().getId() : selectedRow.getStaffA().getId();
-                staffService.removeIncompatibility(staff.getId(), otherId);
+                relationshipService.removeIncompatibility(staff.getId(), otherId);
                 refreshIncompatibilitiesGrid(grid, staff);
                 ViewUtils.notify("Incompatibility removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {
@@ -443,7 +455,7 @@ public class StaffView extends VerticalLayout {
         Button addBtn = new Button("Add", e -> {
             if (otherStaff.getValue() == null) return;
             try {
-                staffService.addPairing(staff.getId(), otherStaff.getValue().getId(),
+                relationshipService.addPairing(staff.getId(), otherStaff.getValue().getId(),
                         reason.getValue().isBlank() ? null : reason.getValue());
                 refreshPairingsGrid(grid, staff);
                 otherStaff.clear();
@@ -462,7 +474,7 @@ public class StaffView extends VerticalLayout {
             try {
                 Long otherId = selectedRow.getStaffA().getId().equals(staff.getId())
                         ? selectedRow.getStaffB().getId() : selectedRow.getStaffA().getId();
-                staffService.removePairing(staff.getId(), otherId);
+                relationshipService.removePairing(staff.getId(), otherId);
                 refreshPairingsGrid(grid, staff);
                 ViewUtils.notify("Pairing removed.", NotificationVariant.LUMO_SUCCESS);
             } catch (Exception ex) {

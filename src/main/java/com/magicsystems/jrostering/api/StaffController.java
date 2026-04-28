@@ -1,6 +1,9 @@
 package com.magicsystems.jrostering.api;
 
 import com.magicsystems.jrostering.domain.*;
+import com.magicsystems.jrostering.service.StaffAssignmentService;
+import com.magicsystems.jrostering.service.StaffQualificationService;
+import com.magicsystems.jrostering.service.StaffRelationshipService;
 import com.magicsystems.jrostering.service.StaffService;
 import com.magicsystems.jrostering.service.StaffService.StaffCreateRequest;
 import com.magicsystems.jrostering.service.StaffService.StaffUpdateRequest;
@@ -24,7 +27,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StaffController {
 
-    private final StaffService staffService;
+    private final StaffService             staffService;
+    private final StaffQualificationService qualificationService;
+    private final StaffAssignmentService    assignmentService;
+    private final StaffRelationshipService  relationshipService;
 
     // =========================================================================
     // Staff CRUD
@@ -71,7 +77,7 @@ public class StaffController {
             @PathVariable Long qualificationId,
             @RequestParam(required = false) LocalDate awardedDate) {
 
-        return ResponseEntity.ok(staffService.addQualification(staffId, qualificationId, awardedDate));
+        return ResponseEntity.ok(qualificationService.addQualification(staffId, qualificationId, awardedDate));
     }
 
     @DeleteMapping("/{staffId}/qualifications/{qualificationId}")
@@ -79,7 +85,7 @@ public class StaffController {
             @PathVariable Long staffId,
             @PathVariable Long qualificationId) {
 
-        staffService.removeQualification(staffId, qualificationId);
+        qualificationService.removeQualification(staffId, qualificationId);
         return ResponseEntity.noContent().build();
     }
 
@@ -93,7 +99,7 @@ public class StaffController {
             @PathVariable Long siteId,
             @RequestParam(defaultValue = "false") boolean primarySite) {
 
-        return ResponseEntity.ok(staffService.addSiteAssignment(staffId, siteId, primarySite));
+        return ResponseEntity.ok(assignmentService.addSiteAssignment(staffId, siteId, primarySite));
     }
 
     @DeleteMapping("/{staffId}/sites/{siteId}")
@@ -101,7 +107,7 @@ public class StaffController {
             @PathVariable Long staffId,
             @PathVariable Long siteId) {
 
-        staffService.removeSiteAssignment(staffId, siteId);
+        assignmentService.removeSiteAssignment(staffId, siteId);
         return ResponseEntity.noContent().build();
     }
 
@@ -115,7 +121,7 @@ public class StaffController {
             @PathVariable Long staffIdTwo,
             @RequestParam(required = false) String reason) {
 
-        return ResponseEntity.ok(staffService.addIncompatibility(staffIdOne, staffIdTwo, reason));
+        return ResponseEntity.ok(relationshipService.addIncompatibility(staffIdOne, staffIdTwo, reason));
     }
 
     @DeleteMapping("/{staffIdOne}/incompatibilities/{staffIdTwo}")
@@ -123,7 +129,7 @@ public class StaffController {
             @PathVariable Long staffIdOne,
             @PathVariable Long staffIdTwo) {
 
-        staffService.removeIncompatibility(staffIdOne, staffIdTwo);
+        relationshipService.removeIncompatibility(staffIdOne, staffIdTwo);
         return ResponseEntity.noContent().build();
     }
 
@@ -137,7 +143,7 @@ public class StaffController {
             @PathVariable Long staffIdTwo,
             @RequestParam(required = false) String reason) {
 
-        return ResponseEntity.ok(staffService.addPairing(staffIdOne, staffIdTwo, reason));
+        return ResponseEntity.ok(relationshipService.addPairing(staffIdOne, staffIdTwo, reason));
     }
 
     @DeleteMapping("/{staffIdOne}/pairings/{staffIdTwo}")
@@ -145,7 +151,7 @@ public class StaffController {
             @PathVariable Long staffIdOne,
             @PathVariable Long staffIdTwo) {
 
-        staffService.removePairing(staffIdOne, staffIdTwo);
+        relationshipService.removePairing(staffIdOne, staffIdTwo);
         return ResponseEntity.noContent().build();
     }
 
