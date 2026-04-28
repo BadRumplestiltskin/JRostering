@@ -1,15 +1,15 @@
 package com.magicsystems.jrostering.ui.staff;
 
 import com.magicsystems.jrostering.domain.*;
-import com.magicsystems.jrostering.repository.OrganisationRepository;
-import com.magicsystems.jrostering.repository.QualificationRepository;
-import com.magicsystems.jrostering.repository.SiteRepository;
 import com.magicsystems.jrostering.repository.StaffIncompatibilityRepository;
 import com.magicsystems.jrostering.repository.StaffPairingRepository;
 import com.magicsystems.jrostering.repository.StaffQualificationRepository;
 import com.magicsystems.jrostering.repository.StaffSiteAssignmentRepository;
 import com.magicsystems.jrostering.domain.StaffIncompatibility;
 import com.magicsystems.jrostering.domain.StaffPairing;
+import com.magicsystems.jrostering.service.OrganisationService;
+import com.magicsystems.jrostering.service.QualificationService;
+import com.magicsystems.jrostering.service.SiteService;
 import com.magicsystems.jrostering.service.StaffAssignmentService;
 import com.magicsystems.jrostering.service.StaffQualificationService;
 import com.magicsystems.jrostering.service.StaffRelationshipService;
@@ -60,9 +60,9 @@ public class StaffView extends VerticalLayout {
     private final StaffQualificationService qualificationService;
     private final StaffAssignmentService    assignmentService;
     private final StaffRelationshipService  relationshipService;
-    private final OrganisationRepository    organisationRepository;
-    private final QualificationRepository   qualificationRepository;
-    private final SiteRepository            siteRepository;
+    private final OrganisationService       organisationService;
+    private final QualificationService      qualificationReadService;
+    private final SiteService               siteService;
     private final StaffQualificationRepository   staffQualificationRepository;
     private final StaffSiteAssignmentRepository  staffSiteAssignmentRepository;
     private final StaffIncompatibilityRepository staffIncompatibilityRepository;
@@ -78,9 +78,9 @@ public class StaffView extends VerticalLayout {
                      StaffQualificationService qualificationService,
                      StaffAssignmentService assignmentService,
                      StaffRelationshipService relationshipService,
-                     OrganisationRepository organisationRepository,
-                     QualificationRepository qualificationRepository,
-                     SiteRepository siteRepository,
+                     OrganisationService organisationService,
+                     QualificationService qualificationReadService,
+                     SiteService siteService,
                      StaffQualificationRepository staffQualificationRepository,
                      StaffSiteAssignmentRepository staffSiteAssignmentRepository,
                      StaffIncompatibilityRepository staffIncompatibilityRepository,
@@ -89,16 +89,15 @@ public class StaffView extends VerticalLayout {
         this.qualificationService       = qualificationService;
         this.assignmentService          = assignmentService;
         this.relationshipService        = relationshipService;
-        this.organisationRepository     = organisationRepository;
-        this.qualificationRepository    = qualificationRepository;
-        this.siteRepository             = siteRepository;
+        this.organisationService        = organisationService;
+        this.qualificationReadService   = qualificationReadService;
+        this.siteService                = siteService;
         this.staffQualificationRepository   = staffQualificationRepository;
         this.staffSiteAssignmentRepository  = staffSiteAssignmentRepository;
         this.staffIncompatibilityRepository = staffIncompatibilityRepository;
         this.staffPairingRepository         = staffPairingRepository;
 
-        orgId = organisationRepository.findAll().stream()
-                .findFirst().map(Organisation::getId).orElse(null);
+        orgId = organisationService.currentOrganisationId();
 
         setPadding(true);
         add(new H2("Staff"));
@@ -271,7 +270,7 @@ public class StaffView extends VerticalLayout {
         refreshQualGrid(grid, staff);
 
         ComboBox<Qualification> qualBox = new ComboBox<>("Add Qualification");
-        qualBox.setItems(qualificationRepository.findAll());
+        qualBox.setItems(qualificationReadService.getAll());
         qualBox.setItemLabelGenerator(Qualification::getName);
 
         DatePicker awardedDate = new DatePicker("Awarded Date");
@@ -331,7 +330,7 @@ public class StaffView extends VerticalLayout {
         refreshSiteGrid(grid, staff);
 
         ComboBox<Site> siteBox = new ComboBox<>("Site");
-        siteBox.setItems(siteRepository.findAll());
+        siteBox.setItems(siteService.getAllActive());
         siteBox.setItemLabelGenerator(Site::getName);
         Checkbox primary = new Checkbox("Primary Site");
 
