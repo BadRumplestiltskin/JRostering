@@ -227,6 +227,8 @@ public class RosterView extends VerticalLayout {
                         ? s.getEndDatetime().toLocalDateTime().toString() : "")
                 .setHeader("End").setAutoWidth(true);
         shiftGrid.addColumn(Shift::getMinimumStaff).setHeader("Min Staff").setAutoWidth(true);
+        shiftGrid.addColumn(s -> s.getShiftType() != null ? s.getShiftType().getName() : "—")
+                .setHeader("Type").setAutoWidth(true);
 
         return new HorizontalLayout(addBtn, editBtn, removeBtn, reqBtn);
     }
@@ -253,13 +255,20 @@ public class RosterView extends VerticalLayout {
         dialog.setHeaderTitle(existing == null ? "Add Shift" : "Edit Shift");
         dialog.setWidth("480px");
 
-        TextField      name     = new TextField("Name");
-        DateTimePicker start    = new DateTimePicker("Start");
-        DateTimePicker end      = new DateTimePicker("End");
-        IntegerField   minStaff = new IntegerField("Minimum Staff");
-        TextArea       notes    = new TextArea("Notes");
+        TextField          name     = new TextField("Name");
+        DateTimePicker     start    = new DateTimePicker("Start");
+        DateTimePicker     end      = new DateTimePicker("End");
+        IntegerField       minStaff = new IntegerField("Minimum Staff");
+        TextArea           notes    = new TextArea("Notes");
+        ComboBox<ShiftType> typeBox = new ComboBox<>("Shift Type");
         minStaff.setValue(1);
         minStaff.setMin(1);
+
+        Site site = siteSelector.getValue();
+        if (site != null) {
+            typeBox.setItems(siteService.getShiftTypes(site.getId()));
+            typeBox.setItemLabelGenerator(ShiftType::getName);
+        }
 
         if (existing != null) {
             if (existing.getName() != null) name.setValue(existing.getName());
@@ -269,9 +278,10 @@ public class RosterView extends VerticalLayout {
                 end.setValue(existing.getEndDatetime().toLocalDateTime());
             minStaff.setValue(existing.getMinimumStaff());
             if (existing.getNotes() != null) notes.setValue(existing.getNotes());
+            if (existing.getShiftType() != null) typeBox.setValue(existing.getShiftType());
         }
 
-        dialog.add(new FormLayout(name, start, end, minStaff, notes));
+        dialog.add(new FormLayout(name, start, end, minStaff, typeBox, notes));
 
         Button save = new Button("Save", e -> {
             try {
@@ -279,12 +289,13 @@ public class RosterView extends VerticalLayout {
                 var endDt   = end.getValue()   != null ? end.getValue().atOffset(ZoneOffset.UTC)   : null;
                 String n    = name.getValue().isBlank()  ? null : name.getValue();
                 String nt   = notes.getValue().isBlank() ? null : notes.getValue();
+                Long typeId = typeBox.getValue() != null ? typeBox.getValue().getId() : null;
                 if (existing == null) {
                     rosterService.addShift(selectedPeriod.getId(),
-                            new ShiftCreateRequest(null, n, startDt, endDt, minStaff.getValue(), nt));
+                            new ShiftCreateRequest(typeId, n, startDt, endDt, minStaff.getValue(), nt));
                 } else {
                     rosterService.updateShift(existing.getId(),
-                            new ShiftUpdateRequest(null, n, startDt, endDt, minStaff.getValue(), nt));
+                            new ShiftUpdateRequest(typeId, n, startDt, endDt, minStaff.getValue(), nt));
                 }
                 dialog.close();
                 refreshShiftGrid();
