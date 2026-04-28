@@ -6,20 +6,22 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * REST API for the solver lifecycle.
  *
- * <p>All endpoints are under {@code /api/solver} and require HTTP Basic authentication.
- * The caller supplies the time limit in seconds (1–86 400). The solve runs asynchronously;
- * poll {@code GET /api/solver/jobs/{jobId}} for completion status.</p>
+ * <p>All endpoints are under {@code /api/solver} and require HTTP Basic authentication
+ * with the {@code MANAGER} role. The solve runs asynchronously; poll
+ * {@code GET /api/solver/jobs/{jobId}} for completion status.</p>
  */
 @RestController
 @RequestMapping("/api/solver")
 @RequiredArgsConstructor
 @Validated
+@PreAuthorize("hasRole('MANAGER')")
 public class SolverController {
 
     private final SolverService solverService;

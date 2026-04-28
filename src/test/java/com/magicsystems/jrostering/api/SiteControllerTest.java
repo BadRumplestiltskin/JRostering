@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(value = SiteController.class, excludeAutoConfiguration = {com.magicsystems.jrostering.JpaAuditingConfig.class})
 @AutoConfigureMockMvc(addFilters = false)
-@WithMockUser
+@WithMockUser(roles = "MANAGER")
 class SiteControllerTest {
 
     @Autowired MockMvc mockMvc;

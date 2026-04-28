@@ -8,6 +8,7 @@ import com.magicsystems.jrostering.service.RosterService.ShiftCreateRequest;
 import com.magicsystems.jrostering.service.RosterService.ShiftUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -16,11 +17,13 @@ import java.util.List;
 /**
  * REST API for roster period management, shift operations, and assignment management.
  *
- * <p>All endpoints require HTTP Basic authentication and are under {@code /api/roster}.</p>
+ * <p>All endpoints require HTTP Basic authentication with the {@code MANAGER} role
+ * and are under {@code /api/roster}.</p>
  */
 @RestController
 @RequestMapping("/api/roster")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('MANAGER')")
 public class RosterController {
 
     private final RosterService rosterService;

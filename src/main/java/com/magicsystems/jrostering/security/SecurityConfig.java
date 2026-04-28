@@ -28,8 +28,11 @@ import java.util.List;
  * </ul>
  *
  * <h3>Authorisation</h3>
- * <p>All authenticated users have full access to all features. Role-based
- * access control is not required in the initial version.</p>
+ * <p>All REST controllers ({@code /api/**}) require the {@code MANAGER} role, enforced via
+ * {@code @PreAuthorize("hasRole('MANAGER')")} on each controller class. All authenticated
+ * users are granted {@code ROLE_MANAGER} by {@link AppUserDetailsService} — single-role
+ * app, but the explicit annotation means future viewer/read-only roles cannot accidentally
+ * access write endpoints.</p>
  *
  * <h3>Password encoding</h3>
  * <p>BCrypt with the default strength (10 rounds). The {@link PasswordEncoder} bean
@@ -67,9 +70,13 @@ public class SecurityConfig {
                     "/sw.js",
                     "/offline.html"
                 ).permitAll()
-                // Actuator health is public so load-balancers can probe it without credentials;
-                // other actuator endpoints require authentication.
-                .requestMatchers("/actuator/health").permitAll()
+                // Actuator liveness/readiness probes must be reachable by Kubernetes
+                // without credentials; other actuator endpoints require authentication.
+                .requestMatchers(
+                    "/actuator/health",
+                    "/actuator/health/liveness",
+                    "/actuator/health/readiness"
+                ).permitAll()
                 .requestMatchers("/actuator/**").authenticated()
                 // All other requests require authentication
                 .anyRequest().authenticated()

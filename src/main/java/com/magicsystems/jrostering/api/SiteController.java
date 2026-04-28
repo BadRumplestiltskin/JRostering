@@ -9,6 +9,7 @@ import com.magicsystems.jrostering.service.SiteService.SiteCreateRequest;
 import com.magicsystems.jrostering.service.SiteService.SiteUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,11 +17,13 @@ import java.util.List;
 /**
  * REST API for site management, shift type reference data, and rule configuration.
  *
- * <p>All endpoints require HTTP Basic authentication and are under {@code /api/sites}.</p>
+ * <p>All endpoints require HTTP Basic authentication with the {@code MANAGER} role
+ * and are under {@code /api/sites}.</p>
  */
 @RestController
 @RequestMapping("/api/sites")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('MANAGER')")
 public class SiteController {
 
     private final SiteService siteService;

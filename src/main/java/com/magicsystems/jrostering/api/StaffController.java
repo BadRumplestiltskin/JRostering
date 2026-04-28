@@ -9,6 +9,7 @@ import com.magicsystems.jrostering.service.StaffService.StaffCreateRequest;
 import com.magicsystems.jrostering.service.StaffService.StaffUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.DayOfWeek;
@@ -20,11 +21,13 @@ import java.util.List;
  * REST API for staff management: CRUD, qualifications, site assignments,
  * incompatibilities, pairings, availability, preferences, and leave.
  *
- * <p>All endpoints require HTTP Basic authentication and are under {@code /api/staff}.</p>
+ * <p>All endpoints require HTTP Basic authentication with the {@code MANAGER} role
+ * and are under {@code /api/staff}.</p>
  */
 @RestController
 @RequestMapping("/api/staff")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('MANAGER')")
 public class StaffController {
 
     private final StaffService             staffService;

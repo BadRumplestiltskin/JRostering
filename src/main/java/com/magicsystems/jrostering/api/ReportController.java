@@ -5,17 +5,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * REST API for Excel report generation.
  *
- * <p>All endpoints require HTTP Basic authentication and are under {@code /api/reports}.
- * Responses are streamed as {@code .xlsx} attachments.</p>
+ * <p>All endpoints require HTTP Basic authentication with the {@code MANAGER} role
+ * and are under {@code /api/reports}. Responses are streamed as {@code .xlsx} attachments.</p>
  */
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('MANAGER')")
 public class ReportController {
 
     private static final MediaType XLSX =

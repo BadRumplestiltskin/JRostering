@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(value = SolverController.class, excludeAutoConfiguration = {com.magicsystems.jrostering.JpaAuditingConfig.class})
 @AutoConfigureMockMvc(addFilters = false)
-@WithMockUser
+@WithMockUser(roles = "MANAGER")
 class SolverControllerTest {
 
     @Autowired MockMvc mockMvc;
