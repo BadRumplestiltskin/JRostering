@@ -1,26 +1,46 @@
 # =============================================================================
 # JRostering — Configuration Example
 # =============================================================================
-# Copy this file to application.properties (or use environment variables) and
-# fill in the required values marked with <angle-brackets>.
-# application.properties is .gitignored when it contains secrets.
+# Copy this file to application.properties and fill in the required values.
+# Keep application.properties out of source control (it is .gitignored).
+#
+# PROFILE SELECTION
+# -----------------
+# JRostering ships three Spring profiles:
+#
+#   dev   — verbose SQL logging, full health details, relaxed solver timeout.
+#           Activate with: mvn spring-boot:run -Dspring-boot.run.profiles=dev
+#
+#   prod  — minimal logging, longer session timeout (8 h), port 8443.
+#           Activate with: SPRING_PROFILES_ACTIVE=prod java -jar app.jar
+#           or in docker-compose.yml (already set to prod by default).
+#
+#   test  — used automatically by Testcontainers integration tests.
+#           Do not activate manually.
+#
+# When no profile is set, the base application.properties defaults apply
+# (INFO logging, port 8080, 30-min session) — suitable for quick local runs
+# without Docker.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # DataSource — PostgreSQL 16.x
 # Set these via environment variables to keep secrets out of source control.
+# The app reads them as ${DB_URL}, ${DB_USERNAME}, ${DB_PASSWORD}.
 # -----------------------------------------------------------------------------
 DB_URL=jdbc:postgresql://localhost:5432/jrostering
 DB_USERNAME=jrostering
 DB_PASSWORD=<your-db-password>
 
-# Or set them directly in application.properties (do not commit the password):
+# Or set them directly in application.properties (never commit the password):
 # spring.datasource.url=jdbc:postgresql://localhost:5432/jrostering
 # spring.datasource.username=jrostering
 # spring.datasource.password=<your-db-password>
 
 # -----------------------------------------------------------------------------
 # Server
+# Override port here if 8080 is taken locally.
+# The prod profile switches to 8443 automatically.
 # -----------------------------------------------------------------------------
 server.port=8080
 

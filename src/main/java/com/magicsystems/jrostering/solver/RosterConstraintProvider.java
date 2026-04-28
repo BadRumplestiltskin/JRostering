@@ -117,6 +117,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .join(ShiftAssignment.class,
                         Joiners.equal(CrossSiteBlockingPeriod::staff, ShiftAssignment::getStaff),
                         Joiners.filtering((block, sa) ->
+                                // Timefold may produce unassigned (staff == null) slots during
+                                // incremental moves; skip them to avoid NPE inside the join.
                                 sa.getStaff() != null
                                 && sa.getShift().getStartDatetime().isBefore(block.endDatetime())
                                 && sa.getShift().getEndDatetime().isAfter(block.startDatetime())))
