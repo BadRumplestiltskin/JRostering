@@ -200,17 +200,33 @@ public class RosterSolutionMapper {
         if (solved.isEmpty()) {
             return;
         }
-        // Build a map of id → staff from the solver's (detached) output.
+
+        // Partition solved assignments into those with staff and those without.
         Map<Long, Staff> staffById = new HashMap<>(solved.size());
+        List<Long> allIds     = new ArrayList<>(solved.size());
+        List<Long> nonNullIds = new ArrayList<>(solved.size());
+
         for (ShiftAssignment sa : solved) {
-            staffById.put(sa.getId(), sa.getStaff());
+            allIds.add(sa.getId());
+            if (sa.getStaff() != null) {
+                staffById.put(sa.getId(), sa.getStaff());
+                nonNullIds.add(sa.getId());
+            }
         }
-        // Load managed entities in a single IN query, then set staff via dirty-check.
-        // This replaces saveAll(detached) which issued one SELECT+UPDATE per row.
-        List<Long> ids = solved.stream().map(ShiftAssignment::getId).toList();
-        List<ShiftAssignment> managed = shiftAssignmentRepository.findAllById(ids);
-        managed.forEach(sa -> sa.setStaff(staffById.get(sa.getId())));
-        log.debug("Persisted {} ShiftAssignment rows", managed.size());
+
+        // Single bulk UPDATE clears every assignment (including INFEASIBLE/unassigned slots).
+        // For a fully-solved roster this costs one UPDATE, not one UPDATE-per-unassigned-slot.
+        shiftAssignmentRepository.clearStaff(allIds);
+
+        if (!nonNullIds.isEmpty()) {
+            // Load only the assigned slots as managed entities, then set staff via dirty-check.
+            // Hibernate batches the resulting UPDATEs (batch_size=50).
+            List<ShiftAssignment> managed = shiftAssignmentRepository.findAllById(nonNullIds);
+            managed.forEach(sa -> sa.setStaff(staffById.get(sa.getId())));
+        }
+
+        log.debug("Persisted {} ShiftAssignment rows ({} assigned, {} cleared)",
+                solved.size(), nonNullIds.size(), allIds.size() - nonNullIds.size());
     }
 
     // =========================================================================
