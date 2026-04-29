@@ -172,6 +172,12 @@
             <version>2.6.0</version>
         </dependency>
 
+        <!-- Caffeine — bounded in-memory caches (rate limiter, brute-force lockout) -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- ===============================================================
              Test dependencies
              =============================================================== -->
