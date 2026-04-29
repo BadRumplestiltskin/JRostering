@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * Manages incompatibility and pairing relationships between {@link Staff} members.
  * Extracted from {@link StaffService} to keep constructor injection size manageable.
@@ -22,6 +24,24 @@ public class StaffRelationshipService {
     private final StaffRepository                staffRepository;
     private final StaffIncompatibilityRepository staffIncompatibilityRepository;
     private final StaffPairingRepository         staffPairingRepository;
+
+    /**
+     * Returns all incompatibility records involving the given staff member.
+     *
+     * @throws EntityNotFoundException if the staff member does not exist
+     */
+    public List<StaffIncompatibility> getIncompatibilitiesForStaff(Long staffId) {
+        return staffIncompatibilityRepository.findByStaff(requireStaff(staffId));
+    }
+
+    /**
+     * Returns all pairing records involving the given staff member.
+     *
+     * @throws EntityNotFoundException if the staff member does not exist
+     */
+    public List<StaffPairing> getPairingsForStaff(Long staffId) {
+        return staffPairingRepository.findByStaff(requireStaff(staffId));
+    }
 
     /**
      * Records that two staff members must never share a shift.

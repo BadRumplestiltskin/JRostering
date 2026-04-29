@@ -78,6 +78,13 @@ public class SecurityConfig {
                     "/actuator/health/readiness"
                 ).permitAll()
                 .requestMatchers("/actuator/**").authenticated()
+                // Swagger UI resources are publicly accessible; the API endpoints
+                // it invokes still require HTTP Basic authentication.
+                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/api-docs/**"
+                ).permitAll()
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )
@@ -88,7 +95,8 @@ public class SecurityConfig {
             .httpBasic(Customizer.withDefaults())
             .csrf(csrf -> csrf
                 // CSRF is handled by Vaadin internally; disable for the API layer
-                .ignoringRequestMatchers("/api/**")
+                // and for the Swagger UI (which invokes API endpoints directly).
+                .ignoringRequestMatchers("/api/**", "/api-docs/**", "/swagger-ui/**")
             );
 
         return http.build();

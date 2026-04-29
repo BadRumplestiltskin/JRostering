@@ -1,12 +1,6 @@
 package com.magicsystems.jrostering.ui.staff;
 
 import com.magicsystems.jrostering.domain.*;
-import com.magicsystems.jrostering.repository.StaffIncompatibilityRepository;
-import com.magicsystems.jrostering.repository.StaffPairingRepository;
-import com.magicsystems.jrostering.repository.StaffQualificationRepository;
-import com.magicsystems.jrostering.repository.StaffSiteAssignmentRepository;
-import com.magicsystems.jrostering.domain.StaffIncompatibility;
-import com.magicsystems.jrostering.domain.StaffPairing;
 import com.magicsystems.jrostering.service.OrganisationService;
 import com.magicsystems.jrostering.service.QualificationService;
 import com.magicsystems.jrostering.service.SiteService;
@@ -63,10 +57,6 @@ public class StaffView extends VerticalLayout {
     private final OrganisationService       organisationService;
     private final QualificationService      qualificationReadService;
     private final SiteService               siteService;
-    private final StaffQualificationRepository   staffQualificationRepository;
-    private final StaffSiteAssignmentRepository  staffSiteAssignmentRepository;
-    private final StaffIncompatibilityRepository staffIncompatibilityRepository;
-    private final StaffPairingRepository         staffPairingRepository;
 
     private final Grid<Staff>    staffGrid   = new Grid<>(Staff.class, false);
     private final VerticalLayout detailPanel = new VerticalLayout();
@@ -80,22 +70,14 @@ public class StaffView extends VerticalLayout {
                      StaffRelationshipService relationshipService,
                      OrganisationService organisationService,
                      QualificationService qualificationReadService,
-                     SiteService siteService,
-                     StaffQualificationRepository staffQualificationRepository,
-                     StaffSiteAssignmentRepository staffSiteAssignmentRepository,
-                     StaffIncompatibilityRepository staffIncompatibilityRepository,
-                     StaffPairingRepository staffPairingRepository) {
-        this.staffService               = staffService;
-        this.qualificationService       = qualificationService;
-        this.assignmentService          = assignmentService;
-        this.relationshipService        = relationshipService;
-        this.organisationService        = organisationService;
-        this.qualificationReadService   = qualificationReadService;
-        this.siteService                = siteService;
-        this.staffQualificationRepository   = staffQualificationRepository;
-        this.staffSiteAssignmentRepository  = staffSiteAssignmentRepository;
-        this.staffIncompatibilityRepository = staffIncompatibilityRepository;
-        this.staffPairingRepository         = staffPairingRepository;
+                     SiteService siteService) {
+        this.staffService             = staffService;
+        this.qualificationService     = qualificationService;
+        this.assignmentService        = assignmentService;
+        this.relationshipService      = relationshipService;
+        this.organisationService      = organisationService;
+        this.qualificationReadService = qualificationReadService;
+        this.siteService              = siteService;
 
         orgId = organisationService.currentOrganisationId();
 
@@ -308,13 +290,11 @@ public class StaffView extends VerticalLayout {
     }
 
     private void refreshQualGrid(Grid<StaffQualification> grid, Staff staff) {
-        Staff fresh = staffService.getById(staff.getId());
-        grid.setItems(staffQualificationRepository.findByStaff(fresh));
+        grid.setItems(qualificationService.getQualificationsForStaff(staff.getId()));
     }
 
     private void refreshSiteGrid(Grid<StaffSiteAssignment> grid, Staff staff) {
-        Staff fresh = staffService.getById(staff.getId());
-        grid.setItems(staffSiteAssignmentRepository.findByStaff(fresh));
+        grid.setItems(assignmentService.getSiteAssignmentsForStaff(staff.getId()));
     }
 
     // -- Site Assignments tab --
@@ -424,8 +404,7 @@ public class StaffView extends VerticalLayout {
     }
 
     private void refreshIncompatibilitiesGrid(Grid<StaffIncompatibility> grid, Staff staff) {
-        Staff fresh = staffService.getById(staff.getId());
-        grid.setItems(staffIncompatibilityRepository.findByStaff(fresh));
+        grid.setItems(relationshipService.getIncompatibilitiesForStaff(staff.getId()));
     }
 
     // -- Pairings tab --
@@ -486,8 +465,7 @@ public class StaffView extends VerticalLayout {
     }
 
     private void refreshPairingsGrid(Grid<StaffPairing> grid, Staff staff) {
-        Staff fresh = staffService.getById(staff.getId());
-        grid.setItems(staffPairingRepository.findByStaff(fresh));
+        grid.setItems(relationshipService.getPairingsForStaff(staff.getId()));
     }
 
     // -- Availability tab --

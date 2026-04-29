@@ -2,6 +2,8 @@ package com.magicsystems.jrostering.api;
 
 import com.magicsystems.jrostering.domain.SolverJob;
 import com.magicsystems.jrostering.service.SolverService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -10,13 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST API for the solver lifecycle.
- *
- * <p>All endpoints are under {@code /api/solver} and require HTTP Basic authentication
- * with the {@code MANAGER} role. The solve runs asynchronously; poll
- * {@code GET /api/solver/jobs/{jobId}} for completion status.</p>
- */
+@Tag(name = "Solver", description = "Async solver lifecycle — submit, cancel and poll jobs")
 @RestController
 @RequestMapping("/api/solver")
 @RequiredArgsConstructor
@@ -26,13 +22,7 @@ public class SolverController {
 
     private final SolverService solverService;
 
-    /**
-     * Submits a solve job for the given roster period.
-     *
-     * @param rosterPeriodId   the period to solve; must be in DRAFT or INFEASIBLE status
-     * @param timeLimitSeconds wall-clock time limit (1–86 400 seconds)
-     * @return 200 with the created {@link SolverJob} in QUEUED status
-     */
+    @Operation(summary = "Submit an async solve job for a roster period")
     @PostMapping("/{rosterPeriodId}/submit")
     public ResponseEntity<SolverJob> submit(
             @PathVariable Long rosterPeriodId,
@@ -42,24 +32,14 @@ public class SolverController {
         return ResponseEntity.ok(job);
     }
 
-    /**
-     * Requests early cancellation of the active solver for the given roster period.
-     *
-     * @param rosterPeriodId the period whose solve should be terminated
-     * @return 204 No Content on success
-     */
+    @Operation(summary = "Cancel the running solve for a roster period")
     @DeleteMapping("/{rosterPeriodId}/cancel")
     public ResponseEntity<Void> cancel(@PathVariable Long rosterPeriodId) {
         solverService.cancelSolve(rosterPeriodId);
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Returns the current state of a solver job.
-     *
-     * @param solverJobId the solver job to look up
-     * @return 200 with the {@link SolverJob}, or 404 if not found
-     */
+    @Operation(summary = "Poll a solver job for its current status")
     @GetMapping("/jobs/{solverJobId}")
     public ResponseEntity<SolverJob> getJob(@PathVariable Long solverJobId) {
         return ResponseEntity.ok(solverService.getSolverJob(solverJobId));

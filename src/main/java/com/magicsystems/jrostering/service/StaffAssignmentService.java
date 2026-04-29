@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * Manages site assignments for {@link Staff}.
  * Extracted from {@link StaffService} to keep constructor injection size manageable.
@@ -22,6 +24,15 @@ public class StaffAssignmentService {
     private final StaffRepository               staffRepository;
     private final SiteRepository                siteRepository;
     private final StaffSiteAssignmentRepository staffSiteAssignmentRepository;
+
+    /**
+     * Returns all site assignments for the given staff member.
+     *
+     * @throws EntityNotFoundException if the staff member does not exist
+     */
+    public List<StaffSiteAssignment> getSiteAssignmentsForStaff(Long staffId) {
+        return staffSiteAssignmentRepository.findByStaff(requireStaff(staffId));
+    }
 
     /**
      * Assigns a staff member to a site.
