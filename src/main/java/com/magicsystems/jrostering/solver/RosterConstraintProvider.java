@@ -16,6 +16,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 /**
  * Timefold constraint provider for the JRostering solver.
@@ -53,14 +54,13 @@ import java.util.Map;
  * coarse-grained — it guides the solver toward equitable distribution rather than
  * enforcing exact equality.</p>
  *
- * <h3>Deduplication opportunity (deferred)</h3>
- * <p>Each of the ~20 configurable rules registers three near-identical constraint methods
- * (HARD/MEDIUM/SOFT variants that differ only in the score tier).  The 3×20 pattern
- * could be collapsed into a single generic helper that accepts a
- * {@code BiFunction<ConstraintFactory, HardMediumSoftScore, Constraint>} and emits all
- * three tiers in a loop.  Deferred until the constraint set stabilises; the savings in
- * lines-of-code are real but the added indirection would obscure constraint names in
- * Timefold's score explanation output.</p>
+ * <h3>Fan-out helpers</h3>
+ * <p>Each configurable rule has three constraint variants (HARD/MEDIUM/SOFT) sharing the
+ * same logic body; only the score tier differs.  The private {@link #forAllLevels} helper
+ * collapses each fan-out method to a one-liner while keeping individual constraint names
+ * fully qualified (e.g. {@code MIN_REST_BETWEEN_SHIFTS_HARD}) for Timefold's score
+ * explanation output.  Rules with two sub-variants (STAFF_MUST_PAIR, PREFERRED_SHIFT_TYPE)
+ * are expanded explicitly in their fan-out method.</p>
  */
 public class RosterConstraintProvider implements ConstraintProvider {
 
@@ -104,6 +104,28 @@ public class RosterConstraintProvider implements ConstraintProvider {
     }
 
     // =========================================================================
+    // Fan-out helpers
+    // =========================================================================
+
+    private static HardMediumSoftScore scoreFor(ConstraintLevel level) {
+        return switch (level) {
+            case HARD   -> HardMediumSoftScore.ofHard(1);
+            case MEDIUM -> HardMediumSoftScore.ofMedium(1);
+            case SOFT   -> HardMediumSoftScore.ONE_SOFT;
+        };
+    }
+
+    private static List<Constraint> forAllLevels(
+            ConstraintFactory factory,
+            BiFunction<ConstraintFactory, ConstraintLevel, Constraint> fn) {
+        return List.of(
+                fn.apply(factory, ConstraintLevel.HARD),
+                fn.apply(factory, ConstraintLevel.MEDIUM),
+                fn.apply(factory, ConstraintLevel.SOFT)
+        );
+    }
+
+    // =========================================================================
     // Cross-site blocking (always hard, no RuleConfiguration gate)
     // =========================================================================
 
@@ -117,6 +139,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .join(ShiftAssignment.class,
                         Joiners.equal(CrossSiteBlockingPeriod::staff, ShiftAssignment::getStaff),
                         Joiners.filtering((block, sa) ->
+                                // Timefold may produce unassigned (staff == null) slots during
+                                // incremental moves; skip them to avoid NPE inside the join.
                                 sa.getStaff() != null
                                 && sa.getShift().getStartDatetime().isBefore(block.endDatetime())
                                 && sa.getShift().getEndDatetime().isAfter(block.startDatetime())))
@@ -133,16 +157,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * and the start of the next.  Parameter: {@code minimumRestHours} (default 10).
      */
     private List<Constraint> minRestBetweenShiftsConstraints(ConstraintFactory factory) {
-        return List.of(
-                minRestBetweenShifts(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                minRestBetweenShifts(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                minRestBetweenShifts(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::minRestBetweenShifts);
     }
 
-    private Constraint minRestBetweenShifts(ConstraintFactory factory,
-                                             ConstraintLevel level,
-                                             HardMediumSoftScore score) {
+    private Constraint minRestBetweenShifts(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MIN_REST_BETWEEN_SHIFTS.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.MIN_REST_BETWEEN_SHIFTS
@@ -177,16 +196,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Penalty magnitude: each excess hour counts as one violation unit.
      */
     private List<Constraint> maxHoursPerDayConstraints(ConstraintFactory factory) {
-        return List.of(
-                maxHoursPerDay(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                maxHoursPerDay(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                maxHoursPerDay(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::maxHoursPerDay);
     }
 
-    private Constraint maxHoursPerDay(ConstraintFactory factory,
-                                       ConstraintLevel level,
-                                       HardMediumSoftScore score) {
+    private Constraint maxHoursPerDay(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MAX_HOURS_PER_DAY.name() + "_" + level.name();
         return factory.forEach(ShiftAssignment.class)
                 .filter(sa -> sa.getStaff() != null)
@@ -219,16 +233,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Parameter: {@code maximumHours} (default 38).
      */
     private List<Constraint> maxHoursPerWeekConstraints(ConstraintFactory factory) {
-        return List.of(
-                maxHoursPerWeek(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                maxHoursPerWeek(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                maxHoursPerWeek(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::maxHoursPerWeek);
     }
 
-    private Constraint maxHoursPerWeek(ConstraintFactory factory,
-                                        ConstraintLevel level,
-                                        HardMediumSoftScore score) {
+    private Constraint maxHoursPerWeek(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MAX_HOURS_PER_WEEK.name() + "_" + level.name();
         return factory.forEach(ShiftAssignment.class)
                 .filter(sa -> sa.getStaff() != null)
@@ -267,16 +276,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * consecutive day — a violation.</p>
      */
     private List<Constraint> maxConsecutiveDaysConstraints(ConstraintFactory factory) {
-        return List.of(
-                maxConsecutiveDays(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                maxConsecutiveDays(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                maxConsecutiveDays(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::maxConsecutiveDays);
     }
 
-    private Constraint maxConsecutiveDays(ConstraintFactory factory,
-                                           ConstraintLevel level,
-                                           HardMediumSoftScore score) {
+    private Constraint maxConsecutiveDays(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MAX_CONSECUTIVE_DAYS.name() + "_" + level.name();
 
         return factory.forEach(RuleConfiguration.class)
@@ -319,16 +323,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Penalty magnitude: number of missing staff.
      */
     private List<Constraint> minStaffPerShiftConstraints(ConstraintFactory factory) {
-        return List.of(
-                minStaffPerShift(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                minStaffPerShift(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                minStaffPerShift(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::minStaffPerShift);
     }
 
-    private Constraint minStaffPerShift(ConstraintFactory factory,
-                                         ConstraintLevel level,
-                                         HardMediumSoftScore score) {
+    private Constraint minStaffPerShift(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MIN_STAFF_PER_SHIFT.name() + "_" + level.name();
         return factory.forEach(ShiftAssignment.class)
                 .groupBy(ShiftAssignment::getShift,
@@ -358,16 +357,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * {@code minimumCount} assigned staff who hold the required qualification.
      */
     private List<Constraint> minQualifiedStaffPerShiftConstraints(ConstraintFactory factory) {
-        return List.of(
-                minQualifiedStaffPerShift(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                minQualifiedStaffPerShift(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                minQualifiedStaffPerShift(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::minQualifiedStaffPerShift);
     }
 
-    private Constraint minQualifiedStaffPerShift(ConstraintFactory factory,
-                                                   ConstraintLevel level,
-                                                   HardMediumSoftScore score) {
+    private Constraint minQualifiedStaffPerShift(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MIN_QUALIFIED_STAFF_PER_SHIFT.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.MIN_QUALIFIED_STAFF_PER_SHIFT
@@ -407,16 +401,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * must hold that qualification (not just the minimum count).
      */
     private List<Constraint> qualificationRequiredForShiftConstraints(ConstraintFactory factory) {
-        return List.of(
-                qualificationRequiredForShift(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                qualificationRequiredForShift(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                qualificationRequiredForShift(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::qualificationRequiredForShift);
     }
 
-    private Constraint qualificationRequiredForShift(ConstraintFactory factory,
-                                                      ConstraintLevel level,
-                                                      HardMediumSoftScore score) {
+    private Constraint qualificationRequiredForShift(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.QUALIFICATION_REQUIRED_FOR_SHIFT.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.QUALIFICATION_REQUIRED_FOR_SHIFT
@@ -445,16 +434,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * assigned to the same shift.
      */
     private List<Constraint> staffMutualExclusionConstraints(ConstraintFactory factory) {
-        return List.of(
-                staffMutualExclusion(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                staffMutualExclusion(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                staffMutualExclusion(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::staffMutualExclusion);
     }
 
-    private Constraint staffMutualExclusion(ConstraintFactory factory,
-                                             ConstraintLevel level,
-                                             HardMediumSoftScore score) {
+    private Constraint staffMutualExclusion(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.STAFF_MUTUAL_EXCLUSION.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.STAFF_MUTUAL_EXCLUSION
@@ -482,19 +466,13 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * A assigned without B, and B assigned without A.
      */
     private List<Constraint> staffMustPairConstraints(ConstraintFactory factory) {
-        return List.of(
-                staffMustPairAWithoutB(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                staffMustPairAWithoutB(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                staffMustPairAWithoutB(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT),
-                staffMustPairBWithoutA(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                staffMustPairBWithoutA(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                staffMustPairBWithoutA(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        List<Constraint> all = new ArrayList<>(forAllLevels(factory, this::staffMustPairAWithoutB));
+        all.addAll(forAllLevels(factory, this::staffMustPairBWithoutA));
+        return all;
     }
 
-    private Constraint staffMustPairAWithoutB(ConstraintFactory factory,
-                                               ConstraintLevel level,
-                                               HardMediumSoftScore score) {
+    private Constraint staffMustPairAWithoutB(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.STAFF_MUST_PAIR.name() + "_A_WITHOUT_B_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.STAFF_MUST_PAIR
@@ -512,9 +490,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .asConstraint(name);
     }
 
-    private Constraint staffMustPairBWithoutA(ConstraintFactory factory,
-                                               ConstraintLevel level,
-                                               HardMediumSoftScore score) {
+    private Constraint staffMustPairBWithoutA(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.STAFF_MUST_PAIR.name() + "_B_WITHOUT_A_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.STAFF_MUST_PAIR
@@ -542,16 +519,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * but is configurable to other levels for exceptional site configurations.
      */
     private List<Constraint> staffLeaveBlockConstraints(ConstraintFactory factory) {
-        return List.of(
-                staffLeaveBlock(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                staffLeaveBlock(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                staffLeaveBlock(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::staffLeaveBlock);
     }
 
-    private Constraint staffLeaveBlock(ConstraintFactory factory,
-                                        ConstraintLevel level,
-                                        HardMediumSoftScore score) {
+    private Constraint staffLeaveBlock(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.STAFF_LEAVE_BLOCK.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.STAFF_LEAVE_BLOCK
@@ -583,16 +555,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * availability is advisory rather than absolute.</p>
      */
     private List<Constraint> staffAvailabilityBlockConstraints(ConstraintFactory factory) {
-        return List.of(
-                staffAvailabilityBlock(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                staffAvailabilityBlock(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                staffAvailabilityBlock(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::staffAvailabilityBlock);
     }
 
-    private Constraint staffAvailabilityBlock(ConstraintFactory factory,
-                                               ConstraintLevel level,
-                                               HardMediumSoftScore score) {
+    private Constraint staffAvailabilityBlock(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.STAFF_AVAILABILITY_BLOCK.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.STAFF_AVAILABILITY_BLOCK
@@ -631,16 +598,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Parameter: {@code penaltyPerViolation} (default 1).
      */
     private List<Constraint> preferredDaysOffConstraints(ConstraintFactory factory) {
-        return List.of(
-                preferredDaysOff(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                preferredDaysOff(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                preferredDaysOff(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::preferredDaysOff);
     }
 
-    private Constraint preferredDaysOff(ConstraintFactory factory,
-                                         ConstraintLevel level,
-                                         HardMediumSoftScore score) {
+    private Constraint preferredDaysOff(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.PREFERRED_DAYS_OFF.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.PREFERRED_DAYS_OFF
@@ -677,19 +639,13 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Only evaluated when the shift has a non-null {@link ShiftType}.
      */
     private List<Constraint> preferredShiftTypeConstraints(ConstraintFactory factory) {
-        return List.of(
-                preferredShiftTypePrefer(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                preferredShiftTypePrefer(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                preferredShiftTypePrefer(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT),
-                preferredShiftTypeAvoid(factory,  ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                preferredShiftTypeAvoid(factory,  ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                preferredShiftTypeAvoid(factory,  ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        List<Constraint> all = new ArrayList<>(forAllLevels(factory, this::preferredShiftTypePrefer));
+        all.addAll(forAllLevels(factory, this::preferredShiftTypeAvoid));
+        return all;
     }
 
-    private Constraint preferredShiftTypePrefer(ConstraintFactory factory,
-                                                 ConstraintLevel level,
-                                                 HardMediumSoftScore score) {
+    private Constraint preferredShiftTypePrefer(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.PREFERRED_SHIFT_TYPE.name() + "_PREFER_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.PREFERRED_SHIFT_TYPE
@@ -714,9 +670,8 @@ public class RosterConstraintProvider implements ConstraintProvider {
                 .asConstraint(name);
     }
 
-    private Constraint preferredShiftTypeAvoid(ConstraintFactory factory,
-                                                ConstraintLevel level,
-                                                HardMediumSoftScore score) {
+    private Constraint preferredShiftTypeAvoid(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.PREFERRED_SHIFT_TYPE.name() + "_AVOID_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.PREFERRED_SHIFT_TYPE
@@ -752,16 +707,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Parameter: {@code penaltyPerViolation} (default 5).
      */
     private List<Constraint> honourRequestedLeaveConstraints(ConstraintFactory factory) {
-        return List.of(
-                honourRequestedLeave(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                honourRequestedLeave(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                honourRequestedLeave(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::honourRequestedLeave);
     }
 
-    private Constraint honourRequestedLeave(ConstraintFactory factory,
-                                             ConstraintLevel level,
-                                             HardMediumSoftScore score) {
+    private Constraint honourRequestedLeave(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.HONOUR_REQUESTED_LEAVE.name() + "_" + level.name();
         return factory.forEach(RuleConfiguration.class)
                 .filter(rc -> rc.getRuleType() == RuleType.HONOUR_REQUESTED_LEAVE
@@ -795,16 +745,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * in one pass, yielding a penalty equal to the excess spread beyond the threshold.</p>
      */
     private List<Constraint> fairHoursDistributionConstraints(ConstraintFactory factory) {
-        return List.of(
-                fairHoursDistribution(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                fairHoursDistribution(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                fairHoursDistribution(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::fairHoursDistribution);
     }
 
-    private Constraint fairHoursDistribution(ConstraintFactory factory,
-                                              ConstraintLevel level,
-                                              HardMediumSoftScore score) {
+    private Constraint fairHoursDistribution(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.FAIR_HOURS_DISTRIBUTION.name() + "_" + level.name();
 
         var staffMinutesMap = factory.forEach(ShiftAssignment.class)
@@ -844,16 +789,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * exceeds {@code maximumDeviationShifts} (default 2).
      */
     private List<Constraint> fairWeekendDistributionConstraints(ConstraintFactory factory) {
-        return List.of(
-                fairWeekendDistribution(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                fairWeekendDistribution(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                fairWeekendDistribution(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::fairWeekendDistribution);
     }
 
-    private Constraint fairWeekendDistribution(ConstraintFactory factory,
-                                                ConstraintLevel level,
-                                                HardMediumSoftScore score) {
+    private Constraint fairWeekendDistribution(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.FAIR_WEEKEND_DISTRIBUTION.name() + "_" + level.name();
 
         var staffWeekendMap = factory.forEach(ShiftAssignment.class)
@@ -892,16 +832,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * A shift is classified as a night shift when its start time is at or after 20:00.
      */
     private List<Constraint> fairNightShiftDistributionConstraints(ConstraintFactory factory) {
-        return List.of(
-                fairNightShiftDistribution(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                fairNightShiftDistribution(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                fairNightShiftDistribution(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::fairNightShiftDistribution);
     }
 
-    private Constraint fairNightShiftDistribution(ConstraintFactory factory,
-                                                   ConstraintLevel level,
-                                                   HardMediumSoftScore score) {
+    private Constraint fairNightShiftDistribution(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.FAIR_NIGHT_SHIFT_DISTRIBUTION.name() + "_" + level.name();
 
         var staffNightMap = factory.forEach(ShiftAssignment.class)
@@ -941,16 +876,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Parameter: {@code penaltyPerMissingStaff} (default 10).
      */
     private List<Constraint> minimiseUnderstaffingConstraints(ConstraintFactory factory) {
-        return List.of(
-                minimiseUnderstaffing(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                minimiseUnderstaffing(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                minimiseUnderstaffing(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::minimiseUnderstaffing);
     }
 
-    private Constraint minimiseUnderstaffing(ConstraintFactory factory,
-                                              ConstraintLevel level,
-                                              HardMediumSoftScore score) {
+    private Constraint minimiseUnderstaffing(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MINIMISE_UNDERSTAFFING.name() + "_" + level.name();
         return factory.forEach(ShiftAssignment.class)
                 .groupBy(ShiftAssignment::getShift,
@@ -981,16 +911,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Parameter: {@code penaltyPerExtraStaff} (default 1).
      */
     private List<Constraint> minimiseOverstaffingConstraints(ConstraintFactory factory) {
-        return List.of(
-                minimiseOverstaffing(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                minimiseOverstaffing(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                minimiseOverstaffing(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::minimiseOverstaffing);
     }
 
-    private Constraint minimiseOverstaffing(ConstraintFactory factory,
-                                             ConstraintLevel level,
-                                             HardMediumSoftScore score) {
+    private Constraint minimiseOverstaffing(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.MINIMISE_OVERSTAFFING.name() + "_" + level.name();
         return factory.forEach(ShiftAssignment.class)
                 .filter(sa -> sa.getStaff() != null)
@@ -1026,16 +951,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * @see #maxConsecutiveDays same algorithm; different parameter key
      */
     private List<Constraint> avoidExcessiveConsecutiveDaysConstraints(ConstraintFactory factory) {
-        return List.of(
-                avoidExcessiveConsecutiveDays(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                avoidExcessiveConsecutiveDays(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                avoidExcessiveConsecutiveDays(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::avoidExcessiveConsecutiveDays);
     }
 
-    private Constraint avoidExcessiveConsecutiveDays(ConstraintFactory factory,
-                                                      ConstraintLevel level,
-                                                      HardMediumSoftScore score) {
+    private Constraint avoidExcessiveConsecutiveDays(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.AVOID_EXCESSIVE_CONSECUTIVE_DAYS.name() + "_" + level.name();
 
         return factory.forEach(RuleConfiguration.class)
@@ -1084,16 +1004,11 @@ public class RosterConstraintProvider implements ConstraintProvider {
      * Parameter: {@code maximumHours} (default 76), {@code penaltyPerExtraHour} (default 3).
      */
     private List<Constraint> softMaxHoursPerPeriodConstraints(ConstraintFactory factory) {
-        return List.of(
-                softMaxHoursPerPeriod(factory, ConstraintLevel.HARD,   HardMediumSoftScore.ofHard(1)),
-                softMaxHoursPerPeriod(factory, ConstraintLevel.MEDIUM, HardMediumSoftScore.ofMedium(1)),
-                softMaxHoursPerPeriod(factory, ConstraintLevel.SOFT,   HardMediumSoftScore.ONE_SOFT)
-        );
+        return forAllLevels(factory, this::softMaxHoursPerPeriod);
     }
 
-    private Constraint softMaxHoursPerPeriod(ConstraintFactory factory,
-                                              ConstraintLevel level,
-                                              HardMediumSoftScore score) {
+    private Constraint softMaxHoursPerPeriod(ConstraintFactory factory, ConstraintLevel level) {
+        HardMediumSoftScore score = scoreFor(level);
         String name = RuleType.SOFT_MAX_HOURS_PER_PERIOD.name() + "_" + level.name();
         return factory.forEach(ShiftAssignment.class)
                 .filter(sa -> sa.getStaff() != null)

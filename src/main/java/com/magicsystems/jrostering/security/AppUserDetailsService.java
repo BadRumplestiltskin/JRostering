@@ -62,7 +62,7 @@ public class AppUserDetailsService implements UserDetailsService {
                 .map(appUser -> User.builder()
                         .username(appUser.getUsername())
                         .password(appUser.getPasswordHash())
-                        .roles("USER")
+                        .roles("MANAGER")
                         .build())
                 .orElseThrow(() ->
                         new UsernameNotFoundException("No active user found with username: " + username));

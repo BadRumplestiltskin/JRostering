@@ -158,6 +158,20 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Bucket4j — in-memory token-bucket rate limiting for /api/** -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>8.9.0</version>
+        </dependency>
+
+        <!-- Springdoc OpenAPI — Swagger UI at /swagger-ui.html, scoped to /api/** -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
+
         <!-- ===============================================================
              Test dependencies
              =============================================================== -->

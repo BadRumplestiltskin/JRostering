@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Manages qualification records for {@link Staff}.
@@ -24,6 +25,15 @@ public class StaffQualificationService {
     private final StaffRepository              staffRepository;
     private final QualificationRepository      qualificationRepository;
     private final StaffQualificationRepository staffQualificationRepository;
+
+    /**
+     * Returns all qualifications held by the given staff member.
+     *
+     * @throws EntityNotFoundException if the staff member does not exist
+     */
+    public List<StaffQualification> getQualificationsForStaff(Long staffId) {
+        return staffQualificationRepository.findByStaff(requireStaff(staffId));
+    }
 
     /**
      * Records that a staff member holds a given qualification.

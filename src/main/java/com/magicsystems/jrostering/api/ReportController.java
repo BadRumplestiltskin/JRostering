@@ -1,21 +1,20 @@
 package com.magicsystems.jrostering.api;
 
 import com.magicsystems.jrostering.report.ExcelReportGenerator;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST API for Excel report generation.
- *
- * <p>All endpoints require HTTP Basic authentication and are under {@code /api/reports}.
- * Responses are streamed as {@code .xlsx} attachments.</p>
- */
+@Tag(name = "Reports", description = "Excel report downloads — staff hours and constraint violations")
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('MANAGER')")
 public class ReportController {
 
     private static final MediaType XLSX =
@@ -23,12 +22,7 @@ public class ReportController {
 
     private final ExcelReportGenerator reportGenerator;
 
-    /**
-     * Downloads a staff hours report for a roster period as an Excel file.
-     *
-     * @param periodId the roster period to report on
-     * @return {@code .xlsx} attachment
-     */
+    @Operation(summary = "Download staff hours report for a roster period as Excel")
     @GetMapping("/staff-hours/{periodId}")
     public ResponseEntity<byte[]> staffHoursReport(@PathVariable Long periodId) {
         byte[] bytes = reportGenerator.generateHoursReport(periodId);
@@ -39,12 +33,7 @@ public class ReportController {
                 .body(bytes);
     }
 
-    /**
-     * Downloads a constraint violation summary report for a completed solver job.
-     *
-     * @param jobId the solver job to report on
-     * @return {@code .xlsx} attachment
-     */
+    @Operation(summary = "Download constraint violation report for a solver job as Excel")
     @GetMapping("/violations/{jobId}")
     public ResponseEntity<byte[]> violationReport(@PathVariable Long jobId) {
         byte[] bytes = reportGenerator.generateViolationSummaryReport(jobId);

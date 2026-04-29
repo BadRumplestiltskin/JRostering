@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(value = ReportController.class, excludeAutoConfiguration = {com.magicsystems.jrostering.JpaAuditingConfig.class})
 @AutoConfigureMockMvc(addFilters = false)
-@WithMockUser
+@WithMockUser(roles = "MANAGER")
 class ReportControllerTest {
 
     @Autowired MockMvc mockMvc;
@@ -64,4 +64,5 @@ class ReportControllerTest {
         mockMvc.perform(get("/api/reports/violations/99"))
                 .andExpect(status().isNotFound());
     }
+
 }

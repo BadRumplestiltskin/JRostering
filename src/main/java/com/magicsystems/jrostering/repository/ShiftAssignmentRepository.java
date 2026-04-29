@@ -5,6 +5,7 @@ import com.magicsystems.jrostering.domain.Shift;
 import com.magicsystems.jrostering.domain.ShiftAssignment;
 import com.magicsystems.jrostering.domain.Staff;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -86,4 +87,13 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
              WHERE s.rosterPeriod = :rosterPeriod
             """)
     List<ShiftAssignment> findByRosterPeriod(@Param("rosterPeriod") RosterPeriod rosterPeriod);
+
+    /**
+     * Bulk-clears the {@code staff} field on all listed assignments in a single UPDATE.
+     * {@code clearAutomatically = true} flushes the EntityManager's first-level cache so
+     * subsequent reads within the same transaction see the updated state.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ShiftAssignment sa SET sa.staff = NULL WHERE sa.id IN :ids")
+    void clearStaff(@Param("ids") Collection<Long> ids);
 }

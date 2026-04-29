@@ -81,10 +81,13 @@ interception — a bean cannot intercept its own `this` calls. Each bean crosses
 Each `RuleType` has one `RuleConfiguration` row per site that activates exactly one of the
 HARD/MEDIUM/SOFT variants via the `constraintLevel` field.
 
-### ShiftAssignment N+1 note
-`RosterSolutionMapper.persistSolution()` issues one merge-per-row due to detached entity IDs.
-Hibernate batch size is set to 50 (`spring.jpa.properties.hibernate.jdbc.batch_size=50`) to
-amortise this. A bulk JPQL UPDATE would eliminate it entirely — deferred until perf budget established.
+### ShiftAssignment persist strategy
+`RosterSolutionMapper.persistSolution()` uses a two-step approach:
+1. One bulk `UPDATE ShiftAssignment SET staff_id = NULL WHERE id IN (...)` clears all slots.
+2. Only assigned (non-null) slots are loaded as managed entities via `findAllById`; Hibernate's
+   dirty-check flushes the non-null UPDATEs in batches of 50 (`hibernate.jdbc.batch_size=50`).
+For a fully INFEASIBLE solve, step 2 is skipped entirely. Total round trips: 1 + ⌈N'/50⌉ where
+N' is the count of assigned slots.
 
 ## Vaadin 24 EOL notice
 

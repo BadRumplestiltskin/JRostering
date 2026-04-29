@@ -160,6 +160,17 @@ public class SiteService {
     }
 
     /**
+     * Returns all active sites for the single installation organisation.
+     * Convenience read method for UI views that do not require an explicit org ID.
+     */
+    public List<Site> getAllActive() {
+        return organisationRepository.findAll().stream()
+                .findFirst()
+                .map(org -> siteRepository.findByOrganisationAndActiveTrue(org))
+                .orElse(List.of());
+    }
+
+    /**
      * Returns all active sites belonging to the given organisation.
      *
      * @throws EntityNotFoundException if the organisation does not exist
