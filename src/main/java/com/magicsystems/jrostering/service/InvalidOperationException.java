@@ -6,7 +6,7 @@ package com.magicsystems.jrostering.service;
  * being solved, or creating a period 2 before period 1 is solved.
  * Maps to HTTP 409 at the API layer.
  */
-public class InvalidOperationException extends RuntimeException {
+public final class InvalidOperationException extends JRosteringException {
 
     @java.io.Serial
     private static final long serialVersionUID = 1L;

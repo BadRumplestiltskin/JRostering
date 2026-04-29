@@ -15,13 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Executes Timefold solver runs asynchronously and manages the lifecycle
@@ -35,15 +31,24 @@ import java.util.concurrent.TimeUnit;
  * in a separate {@code @Service} ensures every call from {@link SolverService}
  * crosses a proxy boundary and is dispatched to the Spring {@code @Async} executor.</p>
  *
+ * <h3>Executor choice</h3>
+ * <p>The {@code @Async("solverExecutor")} qualifier routes this method to the
+ * <em>platform-thread</em> pool defined in {@code AsyncConfig}. Timefold's internal
+ * search is CPU-bound and runs continuously without yielding; a virtual thread would
+ * pin a carrier thread for the entire solve, starving other virtual threads of
+ * scheduler capacity.</p>
+ *
+ * <h3>Time-limit signalling</h3>
+ * <p>Each solve spawns a single virtual thread that sleeps for {@code timeLimitSeconds}
+ * then calls {@link Solver#terminateEarly()}. The virtual thread is interrupted
+ * (and exits immediately) when the solve finishes before the limit. This replaces the
+ * shared {@code ScheduledExecutorService} from earlier versions, eliminating the
+ * need for a {@code @PreDestroy} shutdown hook.</p>
+ *
  * <h3>Active solver registry</h3>
  * <p>In-flight {@link Solver} instances are stored in {@link #activeSolvers}, keyed
  * by roster period ID. This allows {@link #requestCancel(Long)} to signal a running
  * solver from the web thread while the solve executes on a background thread.</p>
- *
- * <h3>Per-job time limits</h3>
- * <p>The caller passes the time limit as a parameter. A single-threaded daemon
- * {@link ScheduledExecutorService} fires {@link Solver#terminateEarly()} when the
- * limit expires.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -72,18 +77,6 @@ public class SolverExecutor {
      */
     private final Set<Long> cancelRequested = ConcurrentHashMap.newKeySet();
 
-    /**
-     * Daemon scheduler that fires time-limit termination signals.
-     * One thread is sufficient — each scheduled task is a non-blocking
-     * {@link Solver#terminateEarly()} call.
-     */
-    private final ScheduledExecutorService terminationScheduler =
-            Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "solver-termination-scheduler");
-                t.setDaemon(true);
-                return t;
-            });
-
     @PostConstruct
     void registerMetrics() {
         meterRegistry.gauge("jrostering.solver.active", activeSolvers, ConcurrentHashMap::size);
@@ -105,8 +98,7 @@ public class SolverExecutor {
      * the solver may complete between the two calls, causing this method to find no
      * active solver and log a warning rather than signal termination. This is considered
      * an acceptable trade-off — the solve has already finished successfully, the period
-     * is no longer in SOLVING status, and no harm is done. Eliminating the race would
-     * require a distributed lock that adds more complexity than the edge case warrants.</p>
+     * is no longer in SOLVING status, and no harm is done.</p>
      *
      * @param rosterPeriodId the ID of the period whose solver should be terminated early
      */
@@ -135,35 +127,30 @@ public class SolverExecutor {
     // =========================================================================
 
     /**
-     * Executes the solver run on a Spring {@code @Async} background thread.
+     * Executes the solver run on the dedicated platform-thread {@code solverExecutor} pool.
      *
      * <p>Steps:</p>
      * <ol>
      *   <li>Mark the job {@link com.magicsystems.jrostering.domain.SolverJobStatus#RUNNING}
      *       via {@link SolverTransactionHelper} (own transaction).</li>
-     *   <li>Load the {@link RosterSolution} via
-     *       {@link RosterSolutionMapper#buildSolution(Long)} (own read-only transaction).</li>
+     *   <li>Load the {@link RosterSolution} (own read-only transaction).</li>
      *   <li>Register the solver in {@link #activeSolvers}.</li>
-     *   <li>Schedule time-limit termination via {@link #terminationScheduler}.</li>
-     *   <li>Call {@link Solver#solve} — blocks until done for any reason.</li>
+     *   <li>Spawn a virtual timeout thread that calls {@link Solver#terminateEarly()}
+     *       after {@code timeLimitSeconds}. The thread is interrupted when the solve
+     *       finishes first, so it exits immediately without ever calling
+     *       {@code terminateEarly}.</li>
+     *   <li>Call {@link Solver#solve} — blocks on the platform thread until done.</li>
      *   <li>Check the cancel flag and score; delegate persistence to
      *       {@link SolverTransactionHelper} (own transaction per outcome).</li>
      * </ol>
-     *
-     * <p>This method must be called through the Spring proxy (i.e. from a different bean)
-     * for {@code @Async} to take effect. Calling it via {@code this} within the same
-     * class will execute it synchronously.</p>
      *
      * @param solverJobId      the ID of the persisted {@link com.magicsystems.jrostering.domain.SolverJob}
      * @param rosterPeriodId   the ID of the {@link com.magicsystems.jrostering.domain.RosterPeriod} to solve
      * @param timeLimitSeconds maximum seconds the solver may run before forced termination
      */
-    @Async
+    @Async("solverExecutor")
     public void executeSolveAsync(Long solverJobId, Long rosterPeriodId, int timeLimitSeconds) {
         // Step 1 — mark RUNNING in its own transaction.
-        // If this fails the background thread cannot proceed, so we revert the period
-        // from SOLVING back to DRAFT before returning.  Without this call the period
-        // would be stranded in SOLVING status forever because no other code path resets it.
         try {
             txHelper.markJobRunning(solverJobId);
         } catch (Exception e) {
@@ -177,11 +164,19 @@ public class SolverExecutor {
         Solver<RosterSolution> solver = solverFactory.buildSolver();
         activeSolvers.put(rosterPeriodId, solver);
 
-        ScheduledFuture<?> timeLimitFuture = terminationScheduler.schedule(
-                solver::terminateEarly,
-                timeLimitSeconds,
-                TimeUnit.SECONDS
-        );
+        // Spawn a virtual thread for the time-limit signal. It sleeps for the limit
+        // then calls terminateEarly(). If the solve finishes first, we interrupt it
+        // so it exits without ever signalling termination.
+        Thread timeoutThread = Thread.ofVirtual()
+                .name("solver-timeout-" + rosterPeriodId)
+                .start(() -> {
+                    try {
+                        Thread.sleep(Duration.ofSeconds(timeLimitSeconds));
+                        solver.terminateEarly();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
 
         RosterSolution result = null;
         Timer.Sample timerSample = Timer.start(meterRegistry);
@@ -192,10 +187,9 @@ public class SolverExecutor {
 
             // Step 3 — solve (blocks until termination for any reason)
             result = solver.solve(problem);
-            timeLimitFuture.cancel(false);
 
         } catch (Exception e) {
-            timeLimitFuture.cancel(false);
+            timeoutThread.interrupt();
             activeSolvers.remove(rosterPeriodId);
             cancelRequested.remove(rosterPeriodId);
             timerSample.stop(meterRegistry.timer("jrostering.solver.solve", "outcome", "failed"));
@@ -206,6 +200,9 @@ public class SolverExecutor {
             // Guard: always remove even if an unexpected Throwable escapes the catch.
             activeSolvers.remove(rosterPeriodId);
         }
+
+        // Solve finished — stop the timeout thread before inspecting results.
+        timeoutThread.interrupt();
 
         // Step 4 — persist result
         boolean wasCancelled = cancelRequested.remove(rosterPeriodId);
@@ -227,10 +224,6 @@ public class SolverExecutor {
     // Private helpers
     // =========================================================================
 
-    /**
-     * Determines whether the result is feasible (hard == 0 AND medium == 0)
-     * and delegates to the appropriate {@link SolverTransactionHelper} method.
-     */
     private void persistFinalResult(Long solverJobId, Long rosterPeriodId,
                                     RosterSolution result, String violationJson) {
         HardMediumSoftScore score = result.getScore();
@@ -244,14 +237,6 @@ public class SolverExecutor {
         }
     }
 
-    /**
-     * Extracts per-constraint violation totals from the solved solution using
-     * Timefold's {@link ScoreManager} and serialises them as a JSON array.
-     *
-     * <p>Only constraints with at least one violation (non-zero score contribution)
-     * are included.  Failures are caught so that a scoring error never prevents
-     * the result from being persisted.</p>
-     */
     private String buildViolationJson(RosterSolution result) {
         try {
             var explanation = scoreManager.explain(result);
@@ -274,9 +259,6 @@ public class SolverExecutor {
         }
     }
 
-    /**
-     * Builds a human-readable infeasibility summary from the score.
-     */
     private static String buildInfeasibleReason(HardMediumSoftScore score) {
         StringBuilder sb = new StringBuilder("Infeasible solution:");
         if (score.hardScore() < 0) {

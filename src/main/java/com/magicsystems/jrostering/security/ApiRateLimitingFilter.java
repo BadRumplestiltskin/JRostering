@@ -1,5 +1,7 @@
 package com.magicsystems.jrostering.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -13,8 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Servlet filter that enforces a per-IP token-bucket rate limit on all
@@ -25,17 +26,20 @@ import java.util.concurrent.ConcurrentMap;
  * HTTP 429 Too Many Requests with a {@code Retry-After} header indicating how many
  * seconds until the next token is available.</p>
  *
- * <p>Buckets are stored in a {@link ConcurrentHashMap}; they are never evicted
- * for simplicity (appropriate for a single-PC deployment with a small number of
- * distinct clients). For a multi-client deployment consider a scheduled eviction
- * or Caffeine-backed cache.</p>
+ * <p>Buckets are stored in a Caffeine cache (max 10 000 entries, evicted 10 minutes
+ * after last access) to bound memory under long-running deployments with many
+ * distinct clients. Caffeine's {@code LoadingCache} provides thread-safe
+ * atomic bucket creation via {@link Cache#get(Object, java.util.function.Function)}.</p>
  */
 @Component
 public class ApiRateLimitingFilter extends OncePerRequestFilter {
 
     static final int CAPACITY = 100;
 
-    private final ConcurrentMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> buckets = Caffeine.newBuilder()
+            .expireAfterAccess(10, TimeUnit.MINUTES)
+            .maximumSize(10_000)
+            .build();
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -47,7 +51,7 @@ public class ApiRateLimitingFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        Bucket bucket = buckets.computeIfAbsent(remoteAddr(request), this::newBucket);
+        Bucket bucket = buckets.get(remoteAddr(request), ignored -> newBucket());
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
         if (probe.isConsumed()) {
@@ -63,7 +67,7 @@ public class ApiRateLimitingFilter extends OncePerRequestFilter {
         }
     }
 
-    private Bucket newBucket(String ignored) {
+    private static Bucket newBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.classic(CAPACITY, Refill.intervally(CAPACITY, Duration.ofMinutes(1))))
                 .build();

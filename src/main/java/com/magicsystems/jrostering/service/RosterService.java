@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -98,21 +97,6 @@ public class RosterService {
     // =========================================================================
     // Constants
     // =========================================================================
-
-    /** Period statuses from which a period may be reverted to DRAFT. */
-    private static final Set<RosterPeriodStatus> REVERTABLE_STATUSES = Set.of(
-            RosterPeriodStatus.SOLVED,
-            RosterPeriodStatus.PUBLISHED,
-            RosterPeriodStatus.INFEASIBLE
-    );
-
-    /** Period statuses that permit shift modifications (modifications trigger a revert to DRAFT). */
-    private static final Set<RosterPeriodStatus> MODIFIABLE_STATUSES = Set.of(
-            RosterPeriodStatus.DRAFT,
-            RosterPeriodStatus.SOLVED,
-            RosterPeriodStatus.PUBLISHED,
-            RosterPeriodStatus.INFEASIBLE
-    );
 
     // =========================================================================
     // Dependencies
@@ -205,8 +189,7 @@ public class RosterService {
         } else {
             RosterPeriod previous = requireRosterPeriod(previousPeriodId);
 
-            if (previous.getStatus() != RosterPeriodStatus.SOLVED
-                    && previous.getStatus() != RosterPeriodStatus.PUBLISHED) {
+            if (!previous.getStatus().allowsFollowingPeriod()) {
                 throw new InvalidOperationException(
                         "A second roster period can only be created once period 1 is SOLVED or PUBLISHED. "
                         + "Period id=" + previousPeriodId + " is currently " + previous.getStatus() + ".");
@@ -253,7 +236,7 @@ public class RosterService {
     public RosterPeriod revertToDraft(Long rosterPeriodId) {
         RosterPeriod period = requireRosterPeriod(rosterPeriodId);
 
-        if (!REVERTABLE_STATUSES.contains(period.getStatus())) {
+        if (!period.getStatus().isRevertable()) {
             throw new InvalidOperationException(
                     "RosterPeriod id=" + rosterPeriodId + " cannot be reverted to DRAFT. "
                     + "Current status: " + period.getStatus()
@@ -289,7 +272,7 @@ public class RosterService {
     public RosterPeriod publish(Long rosterPeriodId) {
         RosterPeriod period = requireRosterPeriod(rosterPeriodId);
 
-        if (period.getStatus() != RosterPeriodStatus.SOLVED) {
+        if (!period.getStatus().isPublishable()) {
             throw new InvalidOperationException(
                     "Only a SOLVED period may be published. "
                     + "Period id=" + rosterPeriodId + " is " + period.getStatus() + ".");
@@ -316,14 +299,12 @@ public class RosterService {
     public RosterPeriod cancel(Long rosterPeriodId) {
         RosterPeriod period = requireRosterPeriod(rosterPeriodId);
 
-        if (period.getStatus() == RosterPeriodStatus.SOLVING) {
+        if (!period.getStatus().isCancellable()) {
+            String reason = period.getStatus() == RosterPeriodStatus.SOLVING
+                    ? "Cancel the active solve job first."
+                    : "Period is already CANCELLED.";
             throw new InvalidOperationException(
-                    "RosterPeriod id=" + rosterPeriodId + " is currently being solved. "
-                    + "Cancel the active solve job first.");
-        }
-        if (period.getStatus() == RosterPeriodStatus.CANCELLED) {
-            throw new InvalidOperationException(
-                    "RosterPeriod id=" + rosterPeriodId + " is already CANCELLED.");
+                    "RosterPeriod id=" + rosterPeriodId + " cannot be cancelled. " + reason);
         }
 
         period.setStatus(RosterPeriodStatus.CANCELLED);
@@ -604,7 +585,7 @@ public class RosterService {
      * @throws InvalidOperationException if the period is CANCELLED or SOLVING
      */
     private void requirePeriodModifiable(RosterPeriod period) {
-        if (!MODIFIABLE_STATUSES.contains(period.getStatus())) {
+        if (!period.getStatus().isModifiable()) {
             throw new InvalidOperationException(
                     "RosterPeriod id=" + period.getId() + " does not allow modifications. "
                     + "Status: " + period.getStatus() + ".");
@@ -616,7 +597,7 @@ public class RosterService {
      * reverts it to DRAFT with cascade. DRAFT periods are left unchanged.
      */
     private void revertToRequiredDraftIfNeeded(RosterPeriod period) {
-        if (period.getStatus() == RosterPeriodStatus.DRAFT) {
+        if (!period.getStatus().isRevertable()) {
             return;
         }
         log.info("Shift modification on period id={} (status={}). Reverting to DRAFT.",

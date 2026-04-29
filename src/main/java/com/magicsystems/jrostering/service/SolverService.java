@@ -69,8 +69,7 @@ public class SolverService {
                                  @Min(1) @Max(86_400) int timeLimitSeconds) {
         RosterPeriod period = requirePeriod(rosterPeriodId);
 
-        if (period.getStatus() != RosterPeriodStatus.DRAFT
-                && period.getStatus() != RosterPeriodStatus.INFEASIBLE) {
+        if (!period.getStatus().isSolvable()) {
             throw new InvalidOperationException(
                     "Cannot submit a solve for roster period " + rosterPeriodId
                     + " — current status is " + period.getStatus()
@@ -117,7 +116,7 @@ public class SolverService {
             throw new InvalidOperationException(
                     "Cannot cancel roster period " + rosterPeriodId
                     + " — current status is " + period.getStatus()
-                    + ". Only SOLVING periods can be cancelled.");
+                    + ". Only a SOLVING period can be cancelled via the solver job.");
         }
 
         solverExecutor.requestCancel(rosterPeriodId);
